@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <style>
+        body.theme-purple { --bg-main: #030712; --bg-card: #111827; --bg-input: #030712; --border-color: #1f2937; --accent: #a855f7; }
+        body.theme-nordic { --bg-main: #1e293b; --bg-card: #334155; --bg-input: #1e293b; --border-color: #475569; --accent: #38bdf8; }
+        body.theme-black  { --bg-main: #000000; --bg-card: #0d0d0d; --bg-input: #000000; --border-color: #262626; --accent: #e5e5e5; }
+        body.theme-coffee { --bg-main: #1c1917; --bg-card: #292524; --bg-input: #1c1917; --border-color: #44403c; --accent: #f59e0b; }
+        body.theme-dracula{ --bg-main: #282a36; --bg-card: #44475a; --bg-input: #282a36; --border-color: #6272a4; --accent: #bd93f9; }
+
+        body { background-color: var(--bg-main); }
+        .theme-card { background-color: var(--bg-card); border-color: var(--border-color); }
+        .theme-input { background-color: var(--bg-input); border-color: var(--border-color); }
+
+        .minimap-fade {
+            mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+        }
+
+        .tag-short { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #93c5fd; }
+        .tag-long { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7; }
+        .tag-2d { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: #fcd34d; }
+        .tag-3d { background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); color: #d8b4fe; }
+        .tag-ai { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
+        .tag-default { background: rgba(107, 114, 128, 0.15); border-color: rgba(107, 114, 128, 0.3); color: #d1d5db; }
+    </style>
+</head>
+<body class="theme-purple text-gray-100 min-h-screen flex flex-col items-center justify-center p-6 text-sm">
+
+    <!-- АВТОРИЗАЦИЯ -->
+    <div id="auth-container" class="max-w-sm w-full theme-card border rounded-2xl p-6 shadow-2xl">
+        <h1 class="text-2xl font-bold mb-1 text-center text-purple-400">Media Tracker</h1>
+        <p class="text-gray-400 text-center mb-6 text-xs">Твоя утилитарная база контента</p>
+        <div class="space-y-3">
+            <input type="text" id="username" placeholder="Логин" class="w-full theme-input border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-500">
+            <input type="password" id="password" placeholder="Пароль" class="w-full theme-input border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-500">
+            <div id="error-msg" class="text-red-400 text-xs text-center h-4"></div>
+            <div class="flex gap-2 pt-2">
+                <button onclick="handleAuth('login')" class="flex-1 bg-gray-800 hover:bg-gray-700 font-semibold py-2.5 rounded-xl border border-gray-700 transition">Войти</button>
+                <button onclick="handleAuth('register')" class="flex-1 bg-gray-900 hover:bg-gray-800 py-2.5 rounded-xl transition border border-gray-800 text-gray-300">Регистрация</button>
+            </div>
+            <button onclick="viewAsGuest()" class="w-full text-center text-xs text-gray-400 hover:text-gray-200 underline pt-2">Просмотр публичных списков (Гость)</button>
+        </div>
+    </div>
+
+    <!-- ГЛАВНЫЙ ИНТЕРФЕЙС -->
+    <div id="dashboard-container" class="max-w-[88rem] w-full hidden flex flex-col gap-6">
+        <header class="theme-card border rounded-2xl p-4 px-6 flex items-center justify-between shadow-xl">
+            <span class="font-bold text-gray-300" id="user-display">👤 Пользователь</span>
+            
+            <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-2 theme-input px-3 py-1.5 rounded-xl border">
+                    <span class="text-gray-400">Тема:</span>
+                    <select id="theme-select" onchange="changeTheme(this.value)" class="bg-transparent text-gray-200 focus:outline-none cursor-pointer">
+                        <option value="theme-purple" class="bg-gray-900">Midnight Purple</option>
+                        <option value="theme-nordic" class="bg-gray-900">Nordic Slate 🧘</option>
+                        <option value="theme-coffee" class="bg-gray-900">Warm Coffee ☕</option>
+                        <option value="theme-black" class="bg-gray-900">OLED Black</option>
+                        <option value="theme-dracula" class="bg-gray-900">Dracula</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-1.5 theme-input px-2 py-1.5 rounded-xl border">
+                    <span class="text-gray-400 px-1">Масштаб:</span>
+                    <button onclick="adjustZoom(-0.05)" class="theme-card border px-2 py-0.5 rounded hover:bg-gray-800 text-gray-300 font-bold" title="Уменьшить">-</button>
+                    <span id="zoom-val" class="text-gray-200 w-10 text-center font-medium">100%</span>
+                    <button onclick="adjustZoom(0.05)" class="theme-card border px-2 py-0.5 rounded hover:bg-gray-800 text-gray-300 font-bold" title="Увеличить">+</button>
+                </div>
+                
+                <button onclick="logout()" class="text-red-400 hover:text-red-300 transition" id="auth-btn">Выйти</button>
+            </div>
+        </header>
+
+        <div id="scalable-content" class="flex flex-col gap-6" style="zoom: 1.0;">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Списки и Статистика -->
+                <div id="sidebar-container" class="md:col-span-1 flex flex-col gap-4">
+                    <div class="theme-card border rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
+                        <!-- Переключатель вкладки списков -->
+                        <div class="flex border-b border-gray-800 pb-2 gap-2 text-xs">
+                            <button onclick="switchColTab('my')" id="tab-my-cols" class="flex-1 py-1 font-bold border-b-2 border-purple-400 text-purple-300">Мои списки</button>
+                            <button onclick="switchColTab('public')" id="tab-pub-cols" class="flex-1 py-1 font-bold text-gray-400 hover:text-gray-200 border-b-0">🌐 Публичные</button>
+                        </div>
+
+                        <div id="collections-list" class="flex flex-col gap-1.5"></div>
+
+                        <div id="add-col-block" class="pt-2 border-t border-gray-800 flex flex-col gap-2">
+                            <input type="text" id="new-col-title" placeholder="Новый список..." class="w-full theme-input border rounded-xl px-3 py-2 focus:outline-none focus:border-gray-500">
+                            <button onclick="createCollection()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 font-medium py-2 rounded-xl transition">+ Список</button>
+                        </div>
+                    </div>
+
+                    <div id="stats-box" class="theme-card border rounded-2xl p-4 hidden flex flex-col gap-2.5 shadow-xl text-xs">
+                        <h3 class="font-bold uppercase tracking-wider text-gray-400 text-[11px] pb-1 border-b border-gray-800">Статистика списка</h3>
+                        <div class="flex justify-between text-gray-300"><span>Тайтлов:</span> <b id="stat-titles" class="text-gray-200">0</b></div>
+                        <div class="flex justify-between text-gray-300"><span>Сезонов:</span> <b id="stat-seasons" class="text-gray-200">0</b></div>
+                        <div class="flex justify-between text-gray-300"><span>Эпизодов:</span> <b id="stat-episodes" class="text-gray-200">0</b></div>
+                        <div class="flex justify-between text-gray-300"><span>Фильмов:</span> <b id="stat-movies" class="text-gray-200">0</b></div>
+                        <div class="flex justify-between text-gray-300"><span>Спешлов:</span> <b id="stat-specials" class="text-gray-200">0</b></div>
+                        <div class="pt-2 border-t border-gray-800 flex justify-between text-gray-200 font-semibold">
+                            <span>Всего время:</span> <span id="stat-hours" class="text-gray-300">0 ч</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Центральный блок -->
+                <div id="main-content-wrapper" class="md:col-span-3 flex flex-col">
+                    
+                    <!-- 1. СПИСОК ТАЙТЛОВ -->
+                    <div id="titles-view" class="theme-card border rounded-2xl p-6 shadow-xl flex flex-col gap-4 min-h-[500px]">
+                        <div class="flex justify-between items-center pb-2 border-b border-gray-800">
+                            <h2 id="active-col-title" class="font-bold text-lg text-gray-200">Выбери список</h2>
+                        </div>
+
+                        <div class="w-full">
+                            <input type="text" id="search-input" oninput="filterTitles()" placeholder="🔍 Поиск тайтла, тега..." class="w-full theme-input border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-gray-500 shadow-inner">
+                        </div>
+
+                        <div class="w-full" id="add-title-wrapper">
+                            <button onclick="toggleTitleForm()" id="toggle-form-btn" class="w-full theme-input hover:bg-gray-800 border border-dashed rounded-xl py-2.5 px-4 text-xs font-medium text-gray-400 hover:text-gray-200 flex items-center justify-center gap-2 transition">
+                                <span>+ Добавить новый тайтл</span>
+                            </button>
+
+                            <div id="title-form-container" class="hidden flex flex-col gap-3 theme-input p-4 rounded-xl border mt-2">
+                                <input type="hidden" id="edit-title-id" value="">
+                                <input type="text" id="new-title-name" placeholder="Название тайтла..." class="w-full theme-card border rounded-xl px-3 py-2.5 focus:outline-none focus:border-gray-500">
+                                
+                                <div class="flex gap-4 items-center text-gray-300">
+                                    <span class="text-gray-400">Теги:</span>
+                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="2D" class="accent-gray-600"> 2D</label>
+                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="3D" class="accent-gray-600"> 3D</label>
+                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="#ИИ" class="accent-gray-600"> #ИИ</label>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    <input type="text" id="new-title-comment" placeholder="Комментарий к тайтлу..." class="md:col-span-2 theme-card border rounded-xl px-3 py-2 focus:outline-none focus:border-gray-500">
+                                    <input type="number" id="new-title-rating" placeholder="Рейтинг (0-10)" min="0" max="10" step="0.1" class="theme-card border rounded-xl px-3 py-2 text-center focus:outline-none focus:border-gray-500">
+                                </div>
+
+                                <div class="flex gap-2 items-center justify-between pt-1">
+                                    <div class="flex items-center gap-2">
+                                        <label class="text-gray-400">Статус / День:</label>
+                                        <select id="new-title-day" class="theme-card border rounded-lg px-2 py-1.5 text-gray-200">
+                                            <option value="">Завершен (Архив)</option>
+                                            <option value="Saturday">Суббота</option>
+                                            <option value="Sunday">Воскресенье</option>
+                                            <option value="Monday">Понедельник</option>
+                                            <option value="Tuesday">Вторник</option>
+                                            <option value="Wednesday">Среда</option>
+                                            <option value="Thursday">Четверг</option>
+                                            <option value="Friday">Пятница</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="toggleTitleForm(false)" class="bg-gray-800 hover:bg-gray-700 px-3.5 py-2 rounded-xl text-xs">Закрыть</button>
+                                        <button onclick="saveTitle()" id="save-title-btn" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 font-medium px-4 py-2 rounded-xl transition">Добавить тайтл</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="titles-list" class="flex flex-col gap-3">
+                            <p class="text-gray-500 text-center py-10">Слева выбери список или создай новый.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. ДЕТАЛИ ТАЙТЛА -->
+                    <div id="title-details-view" class="hidden theme-card border rounded-2xl p-6 shadow-xl flex flex-col gap-4 min-h-[500px] w-full">
+                        <div class="flex items-center justify-between pb-3 border-b border-gray-800">
+                            <button onclick="backToTitles()" class="text-gray-300 hover:text-white transition flex items-center gap-1 font-medium">← Назад к списку</button>
+                            <h2 id="detail-title-name" class="font-bold text-lg text-gray-100"></h2>
+                        </div>
+
+                        <!-- ПОЛНАЯ ИНФО-СТРОКА -->
+                        <div id="detail-stats" class="flex flex-wrap gap-2 text-xs text-gray-400 items-center theme-input p-3.5 rounded-xl border"></div>
+
+                        <div class="flex gap-4 items-start w-full">
+                            <!-- Левая часть: Сезоны и серии -->
+                            <div class="flex-1 flex flex-col gap-4 min-w-0">
+                                
+                                <div class="w-full" id="add-season-wrapper">
+                                    <button onclick="toggleSeasonForm()" id="toggle-season-btn" class="w-full theme-input hover:bg-gray-800 border border-dashed rounded-xl py-2.5 px-4 text-xs font-medium text-gray-400 hover:text-gray-200 flex items-center justify-center gap-2 transition">
+                                        <span>+ Добавить новый сезон</span>
+                                    </button>
+
+                                    <div id="season-form-container" class="hidden theme-input p-4 rounded-xl border flex flex-col gap-3 mt-2">
+                                        <input type="hidden" id="edit-season-id" value="">
+                                        <div class="flex gap-2">
+                                            <input type="text" id="new-season-title" placeholder="Название сезона..." class="flex-1 theme-card border rounded-lg px-3 py-2 focus:outline-none focus:border-gray-500">
+                                            <input type="number" id="new-season-dur" value="20" title="Мин/сер" class="w-16 theme-card border rounded-lg px-2 py-2 text-center focus:outline-none focus:border-gray-500">
+                                            <input type="number" id="new-season-rating" placeholder="Рейтинг" min="0" max="10" step="0.1" class="w-20 theme-card border rounded-lg px-2 py-2 text-center focus:outline-none focus:border-gray-500">
+                                        </div>
+                                        <input type="text" id="new-season-comment" placeholder="Комментарий к сезону..." class="w-full theme-card border rounded-lg px-3 py-2 focus:outline-none focus:border-gray-500">
+                                        
+                                        <div class="flex gap-4 items-center text-gray-300">
+                                            <span class="text-gray-400">Теги сезона:</span>
+                                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="2D" class="accent-gray-600"> 2D</label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="3D" class="accent-gray-600"> 3D</label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="#ИИ" class="accent-gray-600"> #ИИ</label>
+                                        </div>
+
+                                        <div class="flex justify-end gap-2 pt-1">
+                                            <button onclick="toggleSeasonForm(false)" class="bg-gray-800 hover:bg-gray-700 px-3.5 py-2 rounded-xl text-xs">Закрыть</button>
+                                            <button onclick="saveSeason()" id="season-save-btn" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 font-medium px-4 py-2 rounded-xl transition">Добавить сезон</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="seasons-list" class="flex flex-col gap-4"></div>
+                            </div>
+
+                            <!-- Правая часть: Расширенная мини-карта (w-48) -->
+                            <div class="w-48 theme-input border rounded-xl p-3 shadow-inner h-fit sticky top-6 flex flex-col gap-2 shrink-0">
+                                <div class="flex flex-col items-center border-b border-gray-800 pb-2">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Мини-карта</span>
+                                    <span id="minimap-counter" class="text-[9px] text-purple-400 font-semibold">0 серий</span>
+                                </div>
+                                <div id="minimap-content" class="minimap-fade flex flex-col gap-1.5 overflow-y-auto max-h-[65vh] py-3 pr-1"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО ДЛЯ НОДА -->
+    <div id="unit-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="theme-card border rounded-2xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <div class="flex justify-between items-center pb-2 border-b border-gray-800">
+                <h3 id="modal-unit-header" class="font-bold text-base text-gray-200">Редактирование элемента</h3>
+                <button onclick="closeUnitModal()" class="text-gray-400 hover:text-gray-200">✕</button>
+            </div>
+            <input type="hidden" id="modal-unit-id">
+            <div class="flex flex-col gap-2">
+                <label class="text-xs text-gray-400">Название элемента:</label>
+                <input type="text" id="modal-unit-title" class="theme-input border rounded-xl px-3 py-2 focus:outline-none focus:border-gray-500">
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-xs text-gray-400">Оценка (0 - 10):</label>
+                <input type="number" id="modal-unit-rating" min="0" max="10" step="0.1" class="theme-input border rounded-xl px-3 py-2 focus:outline-none focus:border-gray-500">
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-xs text-gray-400">Комментарий:</label>
+                <textarea id="modal-unit-comment" rows="3" class="theme-input border rounded-xl p-3 focus:outline-none focus:border-gray-500 resize-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeUnitModal()" class="bg-gray-800 px-4 py-2 rounded-xl">Отмена</button>
+                <button onclick="saveUnitModal()" id="unit-modal-save-btn" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 font-semibold px-5 py-2 rounded-xl transition">Сохранить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- МОДАЛЬНОЕ ОКНО КЛОНИРОВАНИЯ СПИСКА -->
+    <div id="clone-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="theme-card border rounded-2xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <div class="flex justify-between items-center pb-2 border-b border-gray-800">
+                <h3 class="font-bold text-base text-gray-200">Копирование списка</h3>
+                <button onclick="closeCloneModal()" class="text-gray-400 hover:text-gray-200">✕</button>
+            </div>
+            <p class="text-xs text-gray-400">Выберите вариант копирования списка в «Мои списки»:</p>
+            
+            <div class="flex flex-col gap-2.5">
+                <button onclick="confirmClone('full')" class="text-left theme-input hover:bg-gray-800 border p-3 rounded-xl transition">
+                    <div class="font-semibold text-gray-200">1. Полная копия ("Как есть")</div>
+                    <div class="text-[11px] text-gray-400">Копируются все тайтлы, сезоны, серии, комментарии и оценки.</div>
+                </button>
+                <button onclick="confirmClone('titles_with_meta')" class="text-left theme-input hover:bg-gray-800 border p-3 rounded-xl transition">
+                    <div class="font-semibold text-gray-200">2. Тайтлы с оценками и описанием</div>
+                    <div class="text-[11px] text-gray-400">Копируются тайтлы, оценки и комментарии, но без сезонов и серий.</div>
+                </button>
+                <button onclick="confirmClone('titles_only')" class="text-left theme-input hover:bg-gray-800 border p-3 rounded-xl transition">
+                    <div class="font-semibold text-gray-200">3. Каркас (Только названия тайтлов)</div>
+                    <div class="text-[11px] text-gray-400">Копируются только названия тайтлов. Без сезонов, оценок и комментариев.</div>
+                </button>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeCloneModal()" class="bg-gray-800 px-4 py-2 rounded-xl text-xs">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let targetCloneColId = null;
+        let currentUserId = null;
+        let activeColId = null;
+        let activeColName = "";
+        let isReadOnly = false;
+        let activeTab = 'my';
+        let activeTitleId = null;
+        let activeTitleObj = null;
+        let allTitlesCache = [];
+        let allSeasonsCache = [];
+        let currentUnitsCache = [];
+        let currentZoom = 1.0;
+
+        const u = localStorage.getItem('tracker_user');
+        const uid = localStorage.getItem('tracker_user_id');
+        if (u && uid) { currentUserId = parseInt(uid); showDashboard(u); }
+
+        function viewAsGuest() {
+            currentUserId = null;
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('user-display').innerText = `👤 Гость`;
+            document.getElementById('auth-btn').innerText = "Войти";
+            document.getElementById('tab-my-cols').classList.add('hidden');
+            document.getElementById('add-col-block').classList.add('hidden');
+            switchColTab('public');
+        }
+
+        function changeTheme(themeClass) {
+            document.body.className = themeClass + " text-gray-100 min-h-screen flex flex-col items-center justify-center p-6 text-sm";
+            localStorage.setItem('tracker_theme', themeClass);
+        }
+
+        const savedTheme = localStorage.getItem('tracker_theme');
+        if (savedTheme) {
+            document.getElementById('theme-select').value = savedTheme;
+            changeTheme(savedTheme);
+        }
+
+        function adjustZoom(delta) {
+            currentZoom = Math.min(1.4, Math.max(0.8, currentZoom + delta));
+            currentZoom = Math.round(currentZoom * 100) / 100;
+            document.getElementById('scalable-content').style.zoom = currentZoom;
+            document.getElementById('zoom-val').innerText = Math.round(currentZoom * 100) + '%';
+            localStorage.setItem('tracker_zoom', currentZoom);
+        }
+
+        const savedZoom = localStorage.getItem('tracker_zoom');
+        if (savedZoom) {
+            currentZoom = parseFloat(savedZoom);
+            document.getElementById('scalable-content').style.zoom = currentZoom;
+            document.getElementById('zoom-val').innerText = Math.round(currentZoom * 100) + '%';
+        }
+
+        async function handleAuth(type) {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errDiv = document.getElementById('error-msg');
+            errDiv.innerText = "";
+            if (!username || !password) { errDiv.innerText = "Заполни поля!"; return; }
+
+            try {
+                const res = await fetch(`/api/${type}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Ошибка");
+                localStorage.setItem('tracker_user', data.username);
+                localStorage.setItem('tracker_user_id', data.user_id);
+                currentUserId = data.user_id;
+                showDashboard(data.username);
+            } catch (err) { errDiv.innerText = err.message; }
+        }
+
+        function showDashboard(username) {
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('user-display').innerText = `👤 ${username}`;
+            loadCollections();
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        function switchColTab(tab) {
+            activeTab = tab;
+            const myBtn = document.getElementById('tab-my-cols');
+            const pubBtn = document.getElementById('tab-pub-cols');
+
+            if (tab === 'my') {
+                myBtn.className = "flex-1 py-1 font-bold border-b-2 border-purple-400 text-purple-300";
+                pubBtn.className = "flex-1 py-1 font-bold text-gray-400 hover:text-gray-200 border-b-0";
+                document.getElementById('add-col-block').classList.remove('hidden');
+            } else {
+                pubBtn.className = "flex-1 py-1 font-bold border-b-2 border-purple-400 text-purple-300";
+                if (myBtn) myBtn.className = "flex-1 py-1 font-bold text-gray-400 hover:text-gray-200 border-b-0";
+                document.getElementById('add-col-block').classList.add('hidden');
+            }
+            activeColId = null;
+            loadCollections();
+        }
+
+        async function loadCollections() {
+    let url = activeTab === 'my' 
+        ? `/api/collections/${currentUserId}` 
+        : `/api/collections/public${currentUserId ? '?user_id=' + currentUserId : ''}`;
+        
+    const res = await fetch(url);
+    const cols = await res.json();
+    const container = document.getElementById('collections-list');
+
+    if (!cols || cols.length === 0) { 
+        container.innerHTML = `<p class="text-gray-500 text-xs py-2">Списки не найдены</p>`; 
+        activeColId = null;
+        activeColName = "";
+        document.getElementById('titles-list').innerHTML = `<p class="text-gray-500 text-center py-10">Списков пока нет.</p>`;
+        const statsBox = document.getElementById('stats-box');
+        if (statsBox) statsBox.classList.add('hidden');
+        return; 
+    }
+
+    // Если активный ID не найден среди загруженных списков — сбрасываем на первый
+    if (!activeColId || !cols.some(c => c.id === activeColId)) { 
+        activeColId = cols[0].id; 
+        activeColName = activeTab === 'public' ? `${cols[0].owner_username} • ${cols[0].title}` : cols[0].title;
+    }
+
+    const activeCol = cols.find(c => c.id === activeColId) || cols[0];
+    const isOwner = currentUserId && activeCol.user_id === currentUserId;
+    isReadOnly = !currentUserId || activeTab === 'public' || !isOwner;
+
+    container.innerHTML = cols.map(c => {
+        const displayTitle = activeTab === 'public' ? `${c.owner_username} • ${c.title}` : c.title;
+
+        // Показываем кнопки управления, если открыта вкладка "Мои" ИЛИ список принадлежит нам
+        const showControls = activeTab === 'my' || (currentUserId && String(c.user_id) === String(currentUserId));
+
+        return `
+        <div class="flex flex-col gap-1 w-full theme-input p-2 rounded-xl border mb-1">
+            <div class="flex items-center justify-between gap-1 w-full">
+                <button onclick="selectCol(${c.id}, '${displayTitle.replace(/'/g, "\\'")}', ${c.user_id})" class="flex-1 text-left px-2.5 py-1.5 rounded-lg font-medium transition truncate ${c.id === activeColId ? 'bg-gray-800 text-white font-semibold border border-gray-700' : 'text-gray-300 hover:bg-gray-800'}">
+                    ${displayTitle}
+                </button>
+                
+                ${showControls ? `
+                    <button onclick="renameCollection(${c.id}, '${c.title.replace(/'/g, "\\'")}')" class="hover:bg-gray-800 text-gray-400 p-1.5 rounded-lg transition" title="Переименовать список">
+                        ✏️
+                    </button>
+                    <button onclick="togglePublicCol(${c.id})" class="hover:bg-gray-800 text-gray-400 p-1.5 rounded-lg transition" title="${c.is_public ? 'Публичный' : 'Приватный'}">
+                        ${c.is_public ? '🌐' : '🔒'}
+                    </button>
+                    <button onclick="deleteCollection(${c.id}, '${c.title.replace(/'/g, "\\'")}')" class="hover:bg-red-950/40 hover:text-red-400 text-gray-500 p-1.5 rounded-lg transition shrink-0" title="Удалить список">
+                        🗑️
+                    </button>
+                ` : ''}
+            </div>
+
+            ${activeTab === 'public' ? `
+                <div class="flex items-center justify-between pt-1 border-t border-gray-800/60 text-xs px-1">
+                    <button onclick="toggleLike(${c.id})" ${!currentUserId ? 'disabled' : ''} class="flex items-center gap-1 ${c.is_liked ? 'text-red-400 font-bold' : 'text-gray-400 hover:text-gray-200'} transition">
+                        <span>${c.is_liked ? '❤️' : '🤍'}</span>
+                        <span>${c.likes_count || 0}</span>
+                    </button>
+                    ${currentUserId && c.user_id !== currentUserId ? `
+                        <button onclick="openCloneModal(${c.id})" class="text-purple-400 hover:text-purple-300 font-medium transition flex items-center gap-1">
+                            📋 Скопировать
+                        </button>
+                    ` : ''}
+                </div>
+            ` : ''}
+        </div>
+    `}).join('');
+
+    if (activeColId) loadTitles();
+}
+
+        async function togglePublicCol(colId) {
+            await fetch(`/api/collections/${colId}/toggle-public`, { method: 'PUT' });
+            loadCollections();
+        }
+
+        async function createCollection() {
+            const input = document.getElementById('new-col-title');
+            const title = input.value.trim();
+            if (!title) return;
+            await fetch('/api/collections', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, user_id: currentUserId, is_public: false})
+            });
+            input.value = '';
+            loadCollections();
+        }
+
+        async function deleteCollection(colId, colTitle) {
+            const confirmInput = prompt(`Удаление списка "${colTitle}" приведет к удалению ВСЕХ тайтлов внутри него!\n\nДля подтверждения введите слово "delete":`);
+            if (confirmInput === 'delete') {
+                await fetch(`/api/collections/${colId}?user_id=${currentUserId}`, { method: 'DELETE' });
+                if (activeColId === colId) activeColId = null;
+                loadCollections();
+            }
+        }
+
+        function selectCol(id, name, ownerId) { 
+    activeColId = id; 
+    activeColName = name; 
+    
+    // Безопасное сравнение ID через приведение к строке, чтобы не было багов с типами (число/строка)
+    const isOwner = currentUserId && ownerId !== undefined && String(ownerId) === String(currentUserId);
+    
+    // Режим чтения включается, если мы гость, открыта публичная вкладка ИЛИ мы не владельцы
+    isReadOnly = !currentUserId || activeTab === 'public' || !isOwner;
+    
+    backToTitles(); 
+    loadCollections(); 
+}
+
+        function getTagClass(tag) {
+            if (!tag) return 'tag-default';
+            const tagStr = typeof tag === 'object' ? (tag.name || tag.title || '') : String(tag);
+            
+            if (tagStr.includes('short')) return 'tag-short';
+            if (tagStr.includes('long')) return 'tag-long';
+            if (tagStr === '2D' || tagStr === '#2D') return 'tag-2d';
+            if (tagStr === '3D' || tagStr === '#3D') return 'tag-3d';
+            if (tagStr === '#ИИ') return 'tag-ai';
+            return 'tag-default';
+        }
+
+        function toggleExpand(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.classList.toggle('line-clamp-2');
+        }
+
+        function toggleTitleForm(show) {
+            if (isReadOnly) return;
+            const container = document.getElementById('title-form-container');
+            const btn = document.getElementById('toggle-form-btn');
+            if (show === undefined) show = container.classList.contains('hidden');
+            
+            if (show) {
+                container.classList.remove('hidden');
+                btn.classList.add('hidden');
+            } else {
+                container.classList.add('hidden');
+                btn.classList.remove('hidden');
+                resetTitleForm();
+            }
+        }
+
+        function toggleSeasonForm(show) {
+            if (isReadOnly) return;
+            const container = document.getElementById('season-form-container');
+            const btn = document.getElementById('toggle-season-btn');
+            if (show === undefined) show = container.classList.contains('hidden');
+            
+            if (show) {
+                container.classList.remove('hidden');
+                btn.classList.add('hidden');
+            } else {
+                container.classList.add('hidden');
+                btn.classList.remove('hidden');
+                // Больше не вызываем resetSeasonForm здесь автоматически, чтобы не было цикла
+            }
+        }
+
+        async function loadTitles() {
+            document.getElementById('active-col-title').innerText = activeColName;
+            
+            if (isReadOnly) {
+                document.getElementById('add-title-wrapper').classList.add('hidden');
+            } else {
+                document.getElementById('add-title-wrapper').classList.remove('hidden');
+            }
+
+            document.getElementById('sidebar-container').style.display = 'flex';
+            document.getElementById('main-content-wrapper').className = "md:col-span-3 flex flex-col";
+            document.getElementById('title-details-view').style.display = 'none';
+            document.getElementById('titles-view').style.display = 'flex';
+
+            const res = await fetch(`/api/collections/${activeColId}/titles`);
+            const data = await res.json();
+            allTitlesCache = data.titles;
+            const stats = data.stats;
+
+            document.getElementById('stats-box').classList.remove('hidden');
+            document.getElementById('stat-titles').innerText = stats.titles;
+            document.getElementById('stat-seasons').innerText = stats.seasons;
+            document.getElementById('stat-episodes').innerText = stats.episodes;
+            document.getElementById('stat-movies').innerText = stats.movies;
+            document.getElementById('stat-specials').innerText = stats.specials;
+            document.getElementById('stat-hours').innerText = stats.total_hours + " ч";
+
+            renderTitlesList(allTitlesCache);
+        }
+
+        function filterTitles() {
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+            if (!query) {
+                renderTitlesList(allTitlesCache);
+                return;
+            }
+            const filtered = allTitlesCache.filter(t => {
+                const matchName = t.title.toLowerCase().includes(query);
+                const matchComment = t.comment && t.comment.toLowerCase().includes(query);
+                const matchTag = t.tags.some(tag => {
+                    const sTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                    return sTag.toLowerCase().includes(query);
+                });
+                return matchName || matchComment || matchTag;
+            });
+            renderTitlesList(filtered);
+        }
+
+        function renderTitlesList(titles) {
+            const container = document.getElementById('titles-list');
+            if (titles.length === 0) { container.innerHTML = `<p class="text-gray-500 text-center py-10">Ничего не найдено...</p>`; return; }
+
+            container.innerHTML = titles.map(t => {
+                let formattedDate = "";
+                if (t.last_edited_at) {
+                    const d = new Date(t.last_edited_at);
+                    if (!isNaN(d)) {
+                        formattedDate = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+                    }
+                }
+
+                let latestInfo = "";
+                if (t.latest_season_title) {
+                    latestInfo = `<span class="text-gray-300 font-medium">${t.latest_season_title}</span>`;
+                    if (t.latest_unit_num) latestInfo += ` • <span class="text-gray-400">Эп. ${t.latest_unit_num}</span>`;
+                }
+
+                return `
+                    <div class="theme-input border px-4 py-3.5 rounded-xl flex items-start justify-between hover:border-gray-600 transition max-w-full">
+                        <div class="cursor-pointer flex-1 min-w-0 pr-4" onclick='openDetailsById(${t.id})'>
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <span class="font-semibold text-gray-100">${t.title}</span>
+                                ${t.rating !== null && t.rating !== undefined ? `<span class="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs px-2 py-0.5 rounded-lg font-bold">★ ${t.rating}</span>` : ''}
+                                ${t.missed_episodes > 0 ? `<span class="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-2 py-0.5 rounded-full font-bold">+${t.missed_episodes} сер.</span>` : ''}
+                            </div>
+                            
+                            ${latestInfo ? `<div class="text-xs text-gray-400 mt-1">📌 ${latestInfo}</div>` : ''}
+                            ${t.comment ? `<div onclick="event.stopPropagation(); toggleExpand('t-comment-${t.id}')" id="t-comment-${t.id}" class="text-xs text-gray-400 italic mt-1.5 line-clamp-2 hover:text-gray-200 cursor-pointer break-words max-w-full transition">💬 "${t.comment}"</div>` : ''}
+
+                            <div class="flex gap-2 mt-2 text-xs text-gray-400 items-center flex-wrap">
+                                <span class="theme-card px-2 py-0.5 rounded border">Сезонов: ${t.seasons_count}</span>
+                                <span class="theme-card px-2 py-0.5 rounded border">Эпизодов: ${t.total_episodes}</span>
+                                ${t.total_movies > 0 ? `<span class="theme-card px-2 py-0.5 rounded border">Фильмов: ${t.total_movies}</span>` : ''}
+                                <span class="text-gray-300 font-semibold">⏱ ~${t.total_hours} ч</span>
+                                ${formattedDate ? `<span class="text-gray-500">📅 ${formattedDate}</span>` : ''}
+                                <span class="text-gray-500">${t.release_day ? '(' + t.release_day + ')' : '✅ Завершен'}</span>
+                                ${t.tags.map(tag => {
+                                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                                    return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                        ${!isReadOnly ? `
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick='editTitleById(${t.id})' class="theme-card hover:bg-gray-800 border px-3 py-2 rounded-xl text-gray-300 transition">✏️</button>
+                                <button onclick="deleteTitle(${t.id})" class="theme-card hover:bg-red-950/40 border hover:border-red-900 px-3 py-2 rounded-xl text-red-400 transition">🗑️</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openDetailsById(id) {
+            const titleObj = allTitlesCache.find(t => t.id === id);
+            if (titleObj) openDetails(titleObj.id, titleObj.title, titleObj);
+        }
+
+        async function saveTitle() {
+            if (isReadOnly) return;
+            const editId = document.getElementById('edit-title-id').value;
+            const title = document.getElementById('new-title-name').value.trim();
+            const release_day = document.getElementById('new-title-day').value || null;
+            const comment = document.getElementById('new-title-comment').value.trim() || null;
+            const rating = document.getElementById('new-title-rating').value;
+            if (!title) return;
+
+            const tags = Array.from(document.querySelectorAll('input[name="title-tag"]:checked')).map(cb => cb.value);
+
+            const payload = {title, collection_id: activeColId, user_id: currentUserId, tags, release_day, comment, rating};
+
+            await fetch(editId ? `/api/titles/${editId}` : '/api/titles', {
+                method: editId ? 'PUT' : 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            toggleTitleForm(false);
+            loadTitles();
+        }
+
+        function editTitle(t) {
+            if (isReadOnly) return;
+            document.getElementById('edit-title-id').value = t.id;
+            document.getElementById('new-title-name').value = t.title;
+            document.getElementById('new-title-day').value = t.release_day || "";
+            document.getElementById('new-title-comment').value = t.comment || "";
+            document.getElementById('new-title-rating').value = t.rating !== null && t.rating !== undefined ? t.rating : "";
+            
+            document.querySelectorAll('input[name="title-tag"]').forEach(cb => {
+                cb.checked = t.tags.includes(cb.value);
+            });
+
+            document.getElementById('save-title-btn').innerText = "Сохранить";
+            toggleTitleForm(true);
+        }
+
+        function editTitleById(id) {
+            const t = allTitlesCache.find(item => item.id === id);
+            if (t) editTitle(t);
+        }
+
+        function resetTitleForm() {
+            document.getElementById('edit-title-id').value = "";
+            document.getElementById('new-title-name').value = "";
+            document.getElementById('new-title-day').value = "";
+            document.getElementById('new-title-comment').value = "";
+            document.getElementById('new-title-rating').value = "";
+            document.querySelectorAll('input[name="title-tag"]').forEach(cb => cb.checked = false);
+            document.getElementById('save-title-btn').innerText = "Добавить тайтл";
+        }
+
+        async function deleteTitle(id) {
+            if (isReadOnly) return;
+            if (!confirm("Удалить тайтл и все его сезоны?")) return;
+            await fetch(`/api/titles/${id}?user_id=${currentUserId}`, { method: 'DELETE' });
+            loadTitles();
+        }
+
+        function openDetails(id, name, titleObj = null) {
+            activeTitleId = id;
+            activeTitleObj = titleObj;
+            document.getElementById('titles-view').style.display = 'none';
+            document.getElementById('title-details-view').style.display = 'flex';
+            document.getElementById('detail-title-name').innerText = name;
+
+            document.getElementById('sidebar-container').style.display = 'none';
+            document.getElementById('main-content-wrapper').className = "md:col-span-4 flex flex-col";
+
+            loadDetails();
+        }
+
+        function backToTitles() {
+            activeTitleId = null;
+            activeTitleObj = null;
+            loadTitles();
+        }
+
+        async function loadDetails() {
+            const res = await fetch(`/api/titles/${activeTitleId}/details`);
+            const data = await res.json();
+            allSeasonsCache = data.seasons;
+
+            currentUnitsCache = [];
+            data.seasons.forEach(s => {
+                s.units.forEach(u => currentUnitsCache.push(u));
+            });
+
+            let formattedDate = "";
+            if (activeTitleObj && activeTitleObj.last_edited_at) {
+                const d = new Date(activeTitleObj.last_edited_at);
+                if (!isNaN(d)) {
+                    formattedDate = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+                }
+            }
+
+            let moviesCount = 0;
+            data.seasons.forEach(s => {
+                s.units.forEach(u => {
+                    if (u.unit_type === 'movie') moviesCount++;
+                });
+            });
+
+            if (isReadOnly) {
+                document.getElementById('add-season-wrapper').classList.add('hidden');
+            } else {
+                document.getElementById('add-season-wrapper').classList.remove('hidden');
+            }
+
+            document.getElementById('detail-stats').innerHTML = `
+                <span class="theme-card px-2 py-0.5 rounded border">Сезонов: ${data.seasons.length}</span>
+                <span class="theme-card px-2 py-0.5 rounded border">Эпизодов: ${data.total_episodes}</span>
+                ${moviesCount > 0 ? `<span class="theme-card px-2 py-0.5 rounded border">Фильмов: ${moviesCount}</span>` : ''}
+                <span class="text-gray-200 font-semibold">⏱ ~${data.total_hours} ч</span>
+                ${formattedDate ? `<span class="text-gray-400">📅 ${formattedDate}</span>` : ''}
+                <span class="text-gray-400">${data.release_day ? '(' + data.release_day + ')' : '✅ Завершен'}</span>
+                ${activeTitleObj && activeTitleObj.tags ? activeTitleObj.tags.map(tag => {
+                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                    return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                }).join('') : ''}
+            `;
+
+            const container = document.getElementById('seasons-list');
+            const minimapContainer = document.getElementById('minimap-content');
+            const minimapCounter = document.getElementById('minimap-counter');
+
+            minimapCounter.innerText = `${data.total_global_units} серий`;
+
+            if (data.seasons.length === 0) { 
+                container.innerHTML = `<p class="text-gray-500 text-center py-6">Сезонов нет</p>`; 
+                minimapContainer.innerHTML = `<span class="text-[10px] text-gray-500 text-center py-4">Пусто</span>`;
+                return; 
+            }
+
+            // МИНИ-КАРТА
+            let minimapHtml = "";
+            const reversedSeasons = [...data.seasons].reverse();
+
+            reversedSeasons.forEach((s, sRevIdx) => {
+                const seasonNum = data.seasons.length - sRevIdx;
+                let seasonUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number)).reverse();
+                
+                minimapHtml += `<div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider pt-2.5 border-t border-gray-800/80 truncate">${s.title}</div>`;
+                
+                seasonUnits.forEach(u => {
+                    let typeBadge = "";
+                    let itemColor = "border-gray-800 text-gray-200 hover:border-gray-600";
+                    let label = u.global_number ? `${u.global_number}` : u.display_number;
+
+                    if (u.unit_type === 'movie') {
+                        typeBadge = "🎬";
+                        itemColor = "bg-purple-950/40 border-purple-800/60 text-purple-200";
+                    } else if (u.unit_type === 'special') {
+                        typeBadge = "✨";
+                        itemColor = "bg-blue-950/40 border-blue-800/60 text-blue-200";
+                    }
+
+                    if (u.rating && u.rating >= 8) {
+                        itemColor += " border-amber-500/50";
+                    }
+
+                    minimapHtml += `
+                        <div title="${u.title ? u.title : 'Элемент ' + u.display_number}" class="theme-card border text-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${itemColor}">
+                            <span class="font-mono font-bold">${typeBadge} ${label}</span>
+                            <div class="flex items-center gap-1.5">
+                                ${u.rating !== null && u.rating !== undefined ? `<span class="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1 rounded">★${u.rating}</span>` : ''}
+                                <span class="text-[10px] text-gray-400 font-medium">s${seasonNum}e${u.display_number}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            minimapContainer.innerHTML = minimapHtml;
+
+            // РЕНДЕРИНГ ОСНОВНЫХ СЕЗОНОВ
+            const displaySeasons = [...data.seasons].reverse();
+
+            container.innerHTML = displaySeasons.map(s => {
+                const sortedUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number));
+
+                return `
+                <div class="theme-input border rounded-xl p-4 flex flex-col gap-3">
+                    <div class="flex justify-between items-center flex-wrap gap-2">
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-gray-200">${s.title} <span class="text-gray-500 font-normal text-xs">(${s.default_duration_mins} мин/сер)</span></span>
+                            ${s.rating !== null && s.rating !== undefined ? `<span class="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs px-2 py-0.5 rounded-lg font-bold">★ ${s.rating}</span>` : ''}
+                            <div class="flex gap-1">
+                                ${s.tags.map(tag => {
+                                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                        ${!isReadOnly ? `
+                            <div class="flex items-center gap-1.5">
+                                <button onclick='editSeasonById(${s.id})' class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Редактировать">✏️</button>
+                                <button onclick="moveSeason(${s.id}, 'up')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Выше">⬆️</button>
+                                <button onclick="moveSeason(${s.id}, 'down')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Ниже">⬇️</button>
+                                <button onclick="deleteSeason(${s.id})" class="theme-card border hover:border-red-900 px-2.5 py-1.5 rounded-lg text-red-400 ml-2" title="Удалить">🗑️</button>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    ${s.comment ? `<div onclick="toggleExpand('s-comment-${s.id}')" id="s-comment-${s.id}" class="text-xs text-gray-400 italic line-clamp-2 hover:text-gray-200 cursor-pointer break-words max-w-full transition">💬 "${s.comment}"</div>` : ''}
+
+                    <div class="flex flex-wrap gap-2">
+                        ${sortedUnits.length === 0 ? '<span class="text-gray-600 italic">Нет элементов</span>' : 
+                            sortedUnits.map(u => {
+                                let bgStyle = "theme-card border text-gray-200 hover:border-gray-500";
+                                if (u.unit_type === 'movie') bgStyle = "bg-purple-950/60 border-purple-800/80 text-purple-200 font-semibold";
+                                if (u.unit_type === 'special') bgStyle = "bg-blue-950/60 border-blue-800/80 text-blue-200";
+
+                                return `
+                                    <div onclick='openUnitModalById(${u.id})' title="${u.comment ? '💬 ' + u.comment : ''}" class="${bgStyle} px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm cursor-pointer transition">
+                                        ${u.unit_type === 'movie' ? '🎬 ' : ''}
+                                        <span>${u.display_number}${u.title ? '— ' + u.title : ''}</span>
+                                        ${u.rating !== null && u.rating !== undefined ? `<span class="text-amber-300 text-xs font-bold bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">★ ${u.rating}</span>` : ''}
+                                        ${u.comment ? '<span class="text-gray-400 text-xs">💬</span>' : ''}
+                                        ${!isReadOnly ? `<button onclick="event.stopPropagation(); deleteUnit(${u.id})" class="text-gray-500 hover:text-red-400 text-xs ml-1">✕</button>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                    </div>
+
+                    ${!isReadOnly ? `
+                        <div class="flex flex-col gap-2.5 pt-2 border-t border-gray-800">
+                            <div class="flex gap-2">
+                                <select id="u-type-${s.id}" class="theme-card border rounded-lg px-2 py-1.5 text-gray-300">
+                                    <option value="episode">Эпизод</option>
+                                    <option value="movie">Фильм 🎬</option>
+                                    <option value="special">Спешл</option>
+                                </select>
+                                <input type="text" id="u-num-${s.id}" placeholder="№ (1 или 6.5)" class="w-28 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
+                                <input type="text" id="u-title-${s.id}" placeholder="Название..." class="flex-1 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
+                                <input type="number" id="u-dur-${s.id}" placeholder="Мин" title="Кастомная длительность" class="w-16 theme-card border rounded-lg px-2.5 py-1.5 text-center focus:outline-none focus:border-gray-500">
+                                <button onclick="createUnit(${s.id})" class="bg-gray-800 hover:bg-gray-700 px-4 py-1.5 rounded-lg transition">+ Добавить</button>
+                            </div>
+                            <div class="flex gap-2 items-center text-gray-400">
+                                <span>Пакет серий: с</span>
+                                <input type="number" id="batch-start-${s.id}" value="1" class="w-14 theme-card border rounded px-2 py-1 text-center">
+                                <span>по</span>
+                                <input type="number" id="batch-end-${s.id}" value="12" class="w-14 theme-card border rounded px-2 py-1 text-center">
+                                <button onclick="createBatch(${s.id})" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3.5 py-1 rounded-lg transition">Добавить пачкой</button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            }).join('');
+        }
+
+        async function saveSeason() {
+            if (isReadOnly) return;
+            const editId = document.getElementById('edit-season-id').value;
+            const title = document.getElementById('new-season-title').value.trim();
+            const dur = parseInt(document.getElementById('new-season-dur').value) || 20;
+            const comment = document.getElementById('new-season-comment').value.trim() || null;
+            const ratingVal = document.getElementById('new-season-rating').value;
+            const rating = ratingVal !== "" ? parseFloat(ratingVal) : null;
+            
+            if (!title) return;
+
+            // Собираем выбранные теги сезона
+            const tags = Array.from(document.querySelectorAll('input[name="season-tag"]:checked')).map(cb => cb.value);
+
+            if (editId) {
+                // РЕДАКТИРОВАНИЕ (PUT)
+                const payload = { title, default_duration_mins: dur, tags, comment, rating };
+                await fetch(`/api/seasons/${editId}?user_id=${currentUserId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                // СОЗДАНИЕ (POST) - обязательно передаем media_title_id
+                const payload = { 
+                    title, 
+                    media_title_id: activeTitleId, 
+                    default_duration_mins: dur, 
+                    tags, 
+                    comment, 
+                    rating 
+                };
+                await fetch(`/api/seasons?user_id=${currentUserId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            resetSeasonForm();
+            loadDetails();
+        }
+
+        function editSeason(s) {
+            if (isReadOnly) return;
+            document.getElementById('edit-season-id').value = s.id;
+            document.getElementById('new-season-title').value = s.title;
+            document.getElementById('new-season-dur').value = s.default_duration_mins;
+            document.getElementById('new-season-comment').value = s.comment || "";
+            document.getElementById('new-season-rating').value = s.rating !== null && s.rating !== undefined ? s.rating : "";
+
+            document.querySelectorAll('input[name="season-tag"]').forEach(cb => {
+                cb.checked = s.tags.includes(cb.value);
+            });
+
+            document.getElementById('season-save-btn').innerText = "Сохранить";
+            toggleSeasonForm(true);
+        }
+
+        function editSeasonById(id) {
+            const s = allSeasonsCache.find(item => item.id === id);
+            if (s) editSeason(s);
+        }
+
+        function resetSeasonForm() {
+            document.getElementById('edit-season-id').value = "";
+            document.getElementById('new-season-title').value = "";
+            document.getElementById('new-season-dur').value = "20";
+            document.getElementById('new-season-comment').value = "";
+            document.getElementById('new-season-rating').value = "";
+            document.querySelectorAll('input[name="season-tag"]').forEach(cb => cb.checked = false);
+            document.getElementById('season-save-btn').innerText = "Добавить сезон";
+            
+            // Прячем форму напрямую через класс, избегая рекурсии
+            const container = document.getElementById('season-form-container');
+            const btn = document.getElementById('toggle-season-btn');
+            if (container) container.classList.add('hidden');
+            if (btn) btn.classList.remove('hidden');
+        }
+
+        async function moveSeason(seasonId, direction) {
+            if (isReadOnly) return;
+            await fetch(`/api/seasons/${seasonId}/move?user_id=${currentUserId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({direction})
+            });
+            loadDetails();
+        }
+
+        async function deleteSeason(id) {
+            if (isReadOnly) return;
+            if (!confirm("Удалить сезон?")) return;
+            await fetch(`/api/seasons/${id}?user_id=${currentUserId}`, { method: 'DELETE' });
+            loadDetails();
+        }
+
+        async function createUnit(seasonId) {
+            if (isReadOnly) return;
+            const unit_type = document.getElementById(`u-type-${seasonId}`).value;
+            const display_number = document.getElementById(`u-num-${seasonId}`).value.trim();
+            const title = document.getElementById(`u-title-${seasonId}`).value.trim() || null;
+            const duration_mins = document.getElementById(`u-dur-${seasonId}`).value.trim() || null;
+            if (!display_number) return;
+
+            await fetch(`/api/units?user_id=${currentUserId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({season_id: seasonId, display_number, title, unit_type, duration_mins})
+            });
+            loadDetails();
+        }
+
+        async function createBatch(seasonId) {
+            if (isReadOnly) return;
+            const start = parseInt(document.getElementById(`batch-start-${seasonId}`).value);
+            const end = parseInt(document.getElementById(`batch-end-${seasonId}`).value);
+            if (isNaN(start) || isNaN(end) || start > end) return;
+
+            await fetch(`/api/units/batch?user_id=${currentUserId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({season_id: seasonId, start, end})
+            });
+            loadDetails();
+        }
+
+        async function deleteUnit(id) {
+            if (isReadOnly) return;
+            await fetch(`/api/units/${id}?user_id=${currentUserId}`, { method: 'DELETE' });
+            loadDetails();
+        }
+
+        function openUnitModal(u) {
+            document.getElementById('modal-unit-id').value = u.id;
+            document.getElementById('modal-unit-title').value = u.title || "";
+            document.getElementById('modal-unit-rating').value = u.rating !== null && u.rating !== undefined ? u.rating : "";
+            document.getElementById('modal-unit-comment').value = u.comment || "";
+            document.getElementById('modal-unit-header').innerText = `Элемент ${u.display_number}`;
+
+            const saveBtn = document.getElementById('unit-modal-save-btn');
+            if (isReadOnly) {
+                saveBtn.classList.add('hidden');
+            } else {
+                saveBtn.classList.remove('hidden');
+            }
+
+            document.getElementById('unit-modal').classList.remove('hidden');
+        }
+
+        function openUnitModalById(id) {
+            const u = currentUnitsCache.find(item => item.id === id);
+            if (u) openUnitModal(u);
+        }
+
+        function closeUnitModal() {
+            document.getElementById('unit-modal').classList.add('hidden');
+        }
+
+        async function saveUnitModal() {
+            if (isReadOnly) return;
+            const unitId = document.getElementById('modal-unit-id').value;
+            const title = document.getElementById('modal-unit-title').value.trim() || null;
+            const rating = document.getElementById('modal-unit-rating').value;
+            const comment = document.getElementById('modal-unit-comment').value.trim() || null;
+
+            await fetch(`/api/units/${unitId}?user_id=${currentUserId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, rating, comment})
+            });
+
+            closeUnitModal();
+            loadDetails();
+        }
+
+async function toggleLike(colId) {
+    if (!currentUserId) return;
+    await fetch(`/api/collections/${colId}/like?user_id=${currentUserId}`, { method: 'POST' });
+    loadCollections();
+}
+
+function openCloneModal(colId) {
+    targetCloneColId = colId;
+    document.getElementById('clone-modal').classList.remove('hidden');
+}
+
+function closeCloneModal() {
+    targetCloneColId = null;
+    document.getElementById('clone-modal').classList.add('hidden');
+}
+
+async function confirmClone(mode) {
+    if (!targetCloneColId || !currentUserId) return;
+    const res = await fetch(`/api/collections/${targetCloneColId}/clone`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: currentUserId, mode })
+    });
+    const data = await res.json();
+    closeCloneModal();
+    
+    // Переключаемся обратно на "Мои списки" и активируем скопированный список
+    switchColTab('my');
+}
+
+async function renameCollection(colId, currentTitle) {
+            const newTitle = prompt("Введите новое название списка:", currentTitle);
+            if (!newTitle || !newTitle.trim() || newTitle === currentTitle) return;
+
+            await fetch(`/api/collections/${colId}?user_id=${currentUserId}&title=${encodeURIComponent(newTitle.trim())}`, {
+                method: 'PUT'
+            });
+            loadCollections();
+        }
+
+    </script>
+</body>
+</html>
