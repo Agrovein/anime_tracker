@@ -220,7 +220,7 @@
                             <div class="w-48 theme-input border rounded-xl p-3 shadow-inner h-fit sticky top-6 flex flex-col gap-2 shrink-0">
                                 <div class="flex flex-col items-center border-b border-gray-800 pb-2">
                                     <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Мини-карта</span>
-                                    <span id="minimap-counter" class="text-[9px] text-purple-400 font-semibold">0 серий</span>
+                                    <span id="minimap-counter" class="text-[14px] text-purple-400 font-semibold">0 серий</span>
                                 </div>
                                 <div id="minimap-content" class="minimap-fade flex flex-col gap-1.5 overflow-y-auto max-h-[65vh] py-3 pr-1"></div>
                             </div>
@@ -832,8 +832,8 @@
                         <div title="${u.title ? u.title : 'Элемент ' + u.display_number}" class="theme-card border text-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${itemColor}">
                             <span class="font-mono font-bold">${typeBadge} ${label}</span>
                             <div class="flex items-center gap-1.5">
-                                ${u.rating !== null && u.rating !== undefined ? `<span class="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1 rounded">★${u.rating}</span>` : ''}
-                                <span class="text-[10px] text-gray-400 font-medium">s${seasonNum}e${u.display_number}</span>
+                                ${u.rating !== null && u.rating !== undefined ? `<span class="text-[12px] text-amber-400 font-bold bg-amber-500/10 px-1 rounded">★${u.rating}</span>` : ''}
+                                <span class="text-[12px] text-gray-400 font-medium">s${seasonNum}e${u.display_number}</span>
                             </div>
                         </div>
                     `;

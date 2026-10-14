@@ -418,7 +418,6 @@ def create_season(season_data: schemas.SeasonCreate, user_id: int, db: Session =
 
     max_order = db.query(func.max(models.Season.order_index)).filter(models.Season.media_title_id == season_data.media_title_id).scalar() or 0
     
-    # Создаем сезон без тегов
     new_season = models.Season(
         title=season_data.title,
         media_title_id=season_data.media_title_id,
@@ -428,14 +427,23 @@ def create_season(season_data: schemas.SeasonCreate, user_id: int, db: Session =
         order_index=max_order + 1
     )
     db.add(new_season)
-    db.flush()  # Получаем ID нового сезона, чтобы привязать теги
+    db.flush()
 
-    # Безопасно сохраняем теги из массива строк
-    if season_data.tags and isinstance(season_data.tags, list):
-        for tag_name in season_data.tags:
-            if tag_name:
-                new_tag = models.SeasonTag(season_id=new_season.id, name=tag_name)
-                db.add(new_tag)
+    # Собираем теги из запроса
+    tags_to_save = list(season_data.tags) if season_data.tags and isinstance(season_data.tags, list) else []
+
+    # Логика автотегов по длительности (если указана длительность)
+    if new_season.default_duration_mins is not None and new_season.default_duration_mins > 0:
+        auto_tag = "шорт(5минут)" if new_season.default_duration_mins < 10 else "лонг(15минут)"
+        # Удаляем противоположный автотег на всякий случай и добавляем актуальный
+        tags_to_save = [t for t in tags_to_save if t not in ("шорт(5минут)", "лонг(15минут)")]
+        tags_to_save.append(auto_tag)
+
+    # Сохраняем итоговый список тегов
+    for tag_name in tags_to_save:
+        if tag_name:
+            new_tag = models.SeasonTag(season_id=new_season.id, name=tag_name)
+            db.add(new_tag)
 
     db.commit()
     db.refresh(new_season)
@@ -449,20 +457,32 @@ def update_season(season_id: int, season_data: schemas.SeasonUpdate, user_id: in
     if s.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя редактировать чужие сезоны")
 
-    update_dict = season_data.dict(exclude_unset=True)
-    tags_data = update_dict.pop('tags', None)  # Отделяем теги от остальных полей
+    update_dict = season_data.model_dump(exclude_unset=True) # Заменили dict на model_dump
+    tags_data = update_dict.pop('tags', None)
 
     # Обновляем остальные поля сезона
     for key, value in update_dict.items():
         setattr(s, key, value)
     
-    # Если переданы теги — заменяем старые новыми
+    # Если теги передавали явно, берем их, иначе оставляем существующие теги сезона
     if tags_data is not None and isinstance(tags_data, list):
-        db.query(models.SeasonTag).filter(models.SeasonTag.season_id == s.id).delete()
-        for tag_name in tags_data:
-            if tag_name:
-                new_tag = models.SeasonTag(season_id=s.id, name=tag_name)
-                db.add(new_tag)
+        current_tags = [t for t in tags_data if t]
+    else:
+        current_tags = [t.name for t in s.tags]
+
+    # Пересчитываем автотег на основе актуальной длительности сезона
+    duration_to_check = s.default_duration_mins
+    if duration_to_check is not None and duration_to_check > 0:
+        auto_tag = "шорт(5минут)" if duration_to_check < 10 else "лонг(15минут)"
+        # Очищаем старые автотеги и добавляем актуальный
+        current_tags = [t for t in current_tags if t not in ("шорт(5минут)", "лонг(15минут)")]
+        current_tags.append(auto_tag)
+
+    # Перезаписываем теги в базе
+    db.query(models.SeasonTag).filter(models.SeasonTag.season_id == s.id).delete()
+    for tag_name in current_tags:
+        new_tag = models.SeasonTag(season_id=s.id, name=tag_name)
+        db.add(new_tag)
     
     db.commit()
     db.refresh(s)
@@ -506,6 +526,16 @@ def move_season(season_id: int, move_data: schemas.MoveRequest, user_id: int, db
 
 # ==================== ЭПИЗОДЫ / ЮНИТЫ ====================
 
+def parse_order_index(display_str: str, fallback_order: float) -> float:
+    try:
+        # Пытаемся превратить display_number в float (например, "263.5" -> 263.5)
+        # Убираем всё лишнее, если вдруг там есть пробелы
+        clean_str = str(display_str).strip()
+        return float(clean_str)
+    except (ValueError, TypeError):
+        # Если это не чистое число (например, "OVA"), возвращаем fallback (например, в конец списка)
+        return float(fallback_order)
+
 @app.post("/api/units")
 def create_unit(unit_data: schemas.UnitCreate, user_id: int, db: Session = Depends(get_db)):
     season = db.query(models.Season).filter(models.Season.id == unit_data.season_id).first()
@@ -513,6 +543,12 @@ def create_unit(unit_data: schemas.UnitCreate, user_id: int, db: Session = Depen
         raise HTTPException(status_code=404, detail="Сезон не найден")
     if season.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя добавлять серии в чужие сезоны")
+
+    # Вычисляем order_index на основе display_number (чтобы "263.5" встало между 263 и 264)
+    if unit_data.order_index is None:
+        max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == unit_data.season_id).scalar() or 0.0
+        calculated_order = parse_order_index(unit_data.display_number, max_order + 1.0)
+        unit_data.order_index = calculated_order
 
     new_unit = models.MediaUnit(**unit_data.dict())
     db.add(new_unit)
@@ -546,7 +582,7 @@ def create_batch_units(batch_data: schemas.BatchUnitCreate, user_id: int, db: Se
 
 @app.put("/api/units/{unit_id}")
 def update_unit(unit_id: int, unit_data: schemas.UnitUpdate, user_id: int, db: Session = Depends(get_db)):
-    u = db.query(models.Unit).filter(models.Unit.id == unit_id).first()
+    u = db.query(models.MediaUnit).filter(models.MediaUnit.id == unit_id).first()
     if not u:
         raise HTTPException(status_code=404, detail="Элемент не найден")
     if u.season.media_title.collection.user_id != user_id:
@@ -561,7 +597,7 @@ def update_unit(unit_id: int, unit_data: schemas.UnitUpdate, user_id: int, db: S
 
 @app.delete("/api/units/{unit_id}")
 def delete_unit(unit_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db)):
-    u = db.query(models.Unit).filter(models.Unit.id == unit_id).first()
+    u = db.query(models.MediaUnit).filter(models.MediaUnit.id == unit_id).first()
     if not u:
         raise HTTPException(status_code=404, detail="Элемент не найден")
     if user_id and u.season.media_title.collection.user_id != user_id:
