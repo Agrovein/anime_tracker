@@ -737,189 +737,189 @@
         }
 
         async function loadDetails() {
-            const res = await fetch(`/api/titles/${activeTitleId}/details`);
-            const data = await res.json();
-            allSeasonsCache = data.seasons;
+    const res = await fetch(`/api/titles/${activeTitleId}/details`);
+    const data = await res.json();
+    allSeasonsCache = data.seasons;
 
-            currentUnitsCache = [];
-            data.seasons.forEach(s => {
-                s.units.forEach(u => currentUnitsCache.push(u));
-            });
+    currentUnitsCache = [];
+    data.seasons.forEach(s => {
+        s.units.forEach(u => currentUnitsCache.push(u));
+    });
 
-            let formattedDate = "";
-            if (activeTitleObj && activeTitleObj.last_edited_at) {
-                const d = new Date(activeTitleObj.last_edited_at);
-                if (!isNaN(d)) {
-                    formattedDate = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-                }
+    let formattedDate = "";
+    if (activeTitleObj && activeTitleObj.last_edited_at) {
+        const d = new Date(activeTitleObj.last_edited_at);
+        if (!isNaN(d)) {
+            formattedDate = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+        }
+    }
+
+    let moviesCount = 0;
+    data.seasons.forEach(s => {
+        s.units.forEach(u => {
+            if (u.unit_type === 'movie') moviesCount++;
+        });
+    });
+
+    if (isReadOnly) {
+        document.getElementById('add-season-wrapper').classList.add('hidden');
+    } else {
+        document.getElementById('add-season-wrapper').classList.remove('hidden');
+    }
+
+    document.getElementById('detail-stats').innerHTML = `
+        <span class="theme-card px-2 py-0.5 rounded border">Сезонов: ${data.seasons.length}</span>
+        <span class="theme-card px-2 py-0.5 rounded border">Эпизодов: ${data.total_episodes}</span>
+        ${moviesCount > 0 ? `<span class="theme-card px-2 py-0.5 rounded border">Фильмов: ${moviesCount}</span>` : ''}
+        <span class="text-gray-200 font-semibold">⏱ ~${data.total_hours} ч</span>
+        ${formattedDate ? `<span class="text-gray-400">📅 ${formattedDate}</span>` : ''}
+        <span class="text-gray-400">${data.release_day ? '(' + data.release_day + ')' : '✅ Завершен'}</span>
+    `;
+
+    const container = document.getElementById('seasons-list');
+    const minimapContainer = document.getElementById('minimap-content');
+    const minimapCounter = document.getElementById('minimap-counter');
+
+    minimapCounter.innerText = `${data.total_global_units} серий`;
+
+    if (data.seasons.length === 0) { 
+        container.innerHTML = `<p class="text-gray-500 text-center py-6">Сезонов нет</p>`; 
+        minimapContainer.innerHTML = `<span class="text-[10px] text-gray-500 text-center py-4">Пусто</span>`;
+        return; 
+    }
+
+    // МИНИ-КАРТА
+    let minimapHtml = "";
+    const reversedSeasons = [...data.seasons].reverse();
+
+    reversedSeasons.forEach((s, sRevIdx) => {
+        const seasonNum = data.seasons.length - sRevIdx;
+        let seasonUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number)).reverse();
+        
+        minimapHtml += `<div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider pt-2.5 border-t border-gray-800/80 truncate">${s.title}</div>`;
+        
+        seasonUnits.forEach(u => {
+            let typeBadge = "";
+            let itemColor = "border-gray-800 text-gray-200 hover:border-gray-600";
+            let label = u.global_number ? `${u.global_number}` : u.display_number;
+
+            if (u.unit_type === 'movie') {
+                typeBadge = "🎬";
+                itemColor = "bg-purple-950/40 border-purple-800/60 text-purple-200";
+            } else if (u.unit_type === 'special') {
+                typeBadge = "✨";
+                itemColor = "bg-blue-950/40 border-blue-800/60 text-blue-200";
             }
 
-            let moviesCount = 0;
-            data.seasons.forEach(s => {
-                s.units.forEach(u => {
-                    if (u.unit_type === 'movie') moviesCount++;
-                });
-            });
-
-            if (isReadOnly) {
-                document.getElementById('add-season-wrapper').classList.add('hidden');
-            } else {
-                document.getElementById('add-season-wrapper').classList.remove('hidden');
+            if (u.rating && u.rating >= 8) {
+                itemColor += " border-amber-500/50";
             }
 
-            document.getElementById('detail-stats').innerHTML = `
-                <span class="theme-card px-2 py-0.5 rounded border">Сезонов: ${data.seasons.length}</span>
-                <span class="theme-card px-2 py-0.5 rounded border">Эпизодов: ${data.total_episodes}</span>
-                ${moviesCount > 0 ? `<span class="theme-card px-2 py-0.5 rounded border">Фильмов: ${moviesCount}</span>` : ''}
-                <span class="text-gray-200 font-semibold">⏱ ~${data.total_hours} ч</span>
-                ${formattedDate ? `<span class="text-gray-400">📅 ${formattedDate}</span>` : ''}
-                <span class="text-gray-400">${data.release_day ? '(' + data.release_day + ')' : '✅ Завершен'}</span>
-                ${s.tags.map(tag => {
-                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                    // Обязательно используем ${getTagClass(strTag)}, чтобы применились наши CSS-классы цветов!
-                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
-                }).join('')}
-            `;
-
-            const container = document.getElementById('seasons-list');
-            const minimapContainer = document.getElementById('minimap-content');
-            const minimapCounter = document.getElementById('minimap-counter');
-
-            minimapCounter.innerText = `${data.total_global_units} серий`;
-
-            if (data.seasons.length === 0) { 
-                container.innerHTML = `<p class="text-gray-500 text-center py-6">Сезонов нет</p>`; 
-                minimapContainer.innerHTML = `<span class="text-[10px] text-gray-500 text-center py-4">Пусто</span>`;
-                return; 
-            }
-
-            // МИНИ-КАРТА
-            let minimapHtml = "";
-            const reversedSeasons = [...data.seasons].reverse();
-
-            reversedSeasons.forEach((s, sRevIdx) => {
-                const seasonNum = data.seasons.length - sRevIdx;
-                let seasonUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number)).reverse();
-                
-                minimapHtml += `<div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider pt-2.5 border-t border-gray-800/80 truncate">${s.title}</div>`;
-                
-                seasonUnits.forEach(u => {
-                    let typeBadge = "";
-                    let itemColor = "border-gray-800 text-gray-200 hover:border-gray-600";
-                    let label = u.global_number ? `${u.global_number}` : u.display_number;
-
-                    if (u.unit_type === 'movie') {
-                        typeBadge = "🎬";
-                        itemColor = "bg-purple-950/40 border-purple-800/60 text-purple-200";
-                    } else if (u.unit_type === 'special') {
-                        typeBadge = "✨";
-                        itemColor = "bg-blue-950/40 border-blue-800/60 text-blue-200";
-                    }
-
-                    if (u.rating && u.rating >= 8) {
-                        itemColor += " border-amber-500/50";
-                    }
-
-                    minimapHtml += `
-                        <div title="${u.title ? u.title : 'Элемент ' + u.display_number}" class="theme-card border text-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${itemColor}">
-                            <span class="font-mono font-bold">${typeBadge} ${label}</span>
-                            <div class="flex items-center gap-1.5">
-                                ${u.rating !== null && u.rating !== undefined ? `<span class="text-[12px] text-amber-400 font-bold bg-amber-500/10 px-1 rounded">★${u.rating}</span>` : ''}
-                                <span class="text-[12px] text-gray-400 font-medium">s${seasonNum}e${u.display_number}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-            });
-
-            minimapContainer.innerHTML = minimapHtml;
-
-            // РЕНДЕРИНГ ОСНОВНЫХ СЕЗОНОВ
-            const displaySeasons = [...data.seasons].reverse();
-
-            container.innerHTML = displaySeasons.map(s => {
-                const sortedUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number));
-
-                return `
-                <div class="theme-input border rounded-xl p-4 flex flex-col gap-3">
-                    <div class="flex justify-between items-center flex-wrap gap-2">
-                        <div class="flex items-center gap-3">
-                            <span class="font-bold text-gray-200">${s.title} <span class="text-gray-500 font-normal text-xs">(${s.default_duration_mins} мин/сер)</span></span>
-                            ${s.rating !== null && s.rating !== undefined ? `<span class="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs px-2 py-0.5 rounded-lg font-bold">★ ${s.rating}</span>` : ''}
-                            <div class="flex gap-1">
-                                ${s.tags.map(tag => {
-                                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                                    let colorClass = 'bg-gray-800 text-gray-300 border-gray-700'; // Дефолтный цвет для обычных тегов
-                                    
-                                    if (strTag.includes('short')) {
-                                        colorClass = 'bg-emerald-950 text-emerald-300 border-emerald-800';
-                                    } else if (strTag.includes('long')) {
-                                        colorClass = 'bg-indigo-950 text-indigo-300 border-indigo-800';
-                                    } else {
-                                        // Красивые кастомные цвета для остальных тегов (например, сине-серые или фиолетовые)
-                                        colorClass = 'bg-zinc-800 text-zinc-300 border-zinc-700';
-                                    }
-                                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${colorClass}">${strTag}</span>`;
-                                }).join('')}
-                            </div>
-                        </div>
-                        ${!isReadOnly ? `
-                            <div class="flex items-center gap-1.5">
-                                <button onclick='editSeasonById(${s.id})' class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Редактировать">✏️</button>
-                                <button onclick="moveSeason(${s.id}, 'up')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Выше">⬆️</button>
-                                <button onclick="moveSeason(${s.id}, 'down')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Ниже">⬇️</button>
-                                <button onclick="deleteSeason(${s.id})" class="theme-card border hover:border-red-900 px-2.5 py-1.5 rounded-lg text-red-400 ml-2" title="Удалить">🗑️</button>
-                            </div>
-                        ` : ''}
+            minimapHtml += `
+                <div title="${u.title ? u.title : 'Элемент ' + u.display_number}" class="theme-card border text-xs px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${itemColor}">
+                    <span class="font-mono font-bold">${typeBadge} ${label}</span>
+                    <div class="flex items-center gap-1.5">
+                        ${u.rating !== null && u.rating !== undefined ? `<span class="text-[12px] text-amber-400 font-bold bg-amber-500/10 px-1 rounded">★${u.rating}</span>` : ''}
+                        <span class="text-[12px] text-gray-400 font-medium">s${seasonNum}e${u.display_number}</span>
                     </div>
-
-                    ${s.comment ? `<div onclick="toggleExpand('s-comment-${s.id}')" id="s-comment-${s.id}" class="text-xs text-gray-400 italic line-clamp-2 hover:text-gray-200 cursor-pointer break-words max-w-full transition">💬 "${s.comment}"</div>` : ''}
-
-                    <div class="flex flex-wrap gap-2">
-                        ${sortedUnits.length === 0 ? '<span class="text-gray-600 italic">Нет элементов</span>' : 
-                            sortedUnits.map(u => {
-                                let bgStyle = "theme-card border text-gray-200 hover:border-gray-500";
-                                if (u.unit_type === 'movie') bgStyle = "bg-purple-950/60 border-purple-800/80 text-purple-200 font-semibold";
-                                if (u.unit_type === 'special') bgStyle = "bg-blue-950/60 border-blue-800/80 text-blue-200";
-
-                                return `
-                                    <div onclick='openUnitModalById(${u.id})' title="${u.comment ? '💬 ' + u.comment : ''}" class="${bgStyle} px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm cursor-pointer transition">
-                                        ${u.unit_type === 'movie' ? '🎬 ' : ''}
-                                        <span>${u.display_number}${u.title ? '— ' + u.title : ''}</span>
-                                        ${u.rating !== null && u.rating !== undefined ? `<span class="text-amber-300 text-xs font-bold bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">★ ${u.rating}</span>` : ''}
-                                        ${u.comment ? '<span class="text-gray-400 text-xs">💬</span>' : ''}
-                                        ${!isReadOnly ? `<button onclick="event.stopPropagation(); deleteUnit(${u.id})" class="text-gray-500 hover:text-red-400 text-xs ml-1">✕</button>` : ''}
-                                    </div>
-                                `;
-                            }).join('')}
-                    </div>
-
-                    ${!isReadOnly ? `
-                        <div class="flex flex-col gap-2.5 pt-2 border-t border-gray-800">
-                            <div class="flex gap-2">
-                                <select id="u-type-${s.id}" class="theme-card border rounded-lg px-2 py-1.5 text-gray-300">
-                                    <option value="episode">Эпизод</option>
-                                    <option value="movie">Фильм 🎬</option>
-                                    <option value="special">Спешл</option>
-                                </select>
-                                <input type="text" id="u-num-${s.id}" placeholder="№ (1 или 6.5)" class="w-28 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
-                                <input type="text" id="u-title-${s.id}" placeholder="Название..." class="flex-1 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
-                                <input type="number" id="u-dur-${s.id}" placeholder="Мин" title="Кастомная длительность" class="w-16 theme-card border rounded-lg px-2.5 py-1.5 text-center focus:outline-none focus:border-gray-500">
-                                <button onclick="createUnit(${s.id})" class="bg-gray-800 hover:bg-gray-700 px-4 py-1.5 rounded-lg transition">+ Добавить</button>
-                            </div>
-                            <div class="flex gap-2 items-center text-gray-400">
-                                <span>Пакет серий: с</span>
-                                <input type="number" id="batch-start-${s.id}" value="1" class="w-14 theme-card border rounded px-2 py-1 text-center">
-                                <span>по</span>
-                                <input type="number" id="batch-end-${s.id}" value="12" class="w-14 theme-card border rounded px-2 py-1 text-center">
-                                <button onclick="createBatch(${s.id})" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3.5 py-1 rounded-lg transition">Добавить пачкой</button>
-                            </div>
-                        </div>
-                    ` : ''}
                 </div>
             `;
-            }).join('');
-        }
+        });
+    });
+
+    minimapContainer.innerHTML = minimapHtml;
+
+    // РЕНДЕРИНГ ОСНОВНЫХ СЕЗОНОВ
+    const displaySeasons = [...data.seasons].reverse();
+
+    container.innerHTML = displaySeasons.map(s => {
+        const sortedUnits = [...s.units].sort((a, b) => parseFloat(a.display_number) - parseFloat(b.display_number));
+
+        return `
+        <div class="theme-input border rounded-xl p-4 flex flex-col gap-3">
+            <div class="flex justify-between items-center flex-wrap gap-2">
+                <div class="flex items-center gap-3">
+                    <span class="font-bold text-gray-200">${s.title} <span class="text-gray-500 font-normal text-xs">(${s.default_duration_mins} мин/сер)</span></span>
+                    ${s.rating !== null && s.rating !== undefined ? `<span class="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs px-2 py-0.5 rounded-lg font-bold">★ ${s.rating}</span>` : ''}
+                    <div class="flex gap-1">
+                        ${s.tags.map(tag => {
+                            const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                            let colorClass = 'bg-gray-800 text-gray-300 border-gray-700';
+                            
+                            if (strTag.includes('short')) {
+                                colorClass = 'tag-short';
+                            } else if (strTag.includes('long')) {
+                                colorClass = 'tag-long';
+                            } else if (strTag === '2D' || strTag === '#2D') {
+                                colorClass = 'tag-2d';
+                            } else if (strTag === '3D' || strTag === '#3D') {
+                                colorClass = 'tag-3d';
+                            } else if (strTag === '#ИИ') {
+                                colorClass = 'tag-ai';
+                            } else {
+                                colorClass = 'tag-default';
+                            }
+                            return `<span class="text-xs border px-1.5 py-0.5 rounded ${colorClass}">${strTag}</span>`;
+                        }).join('')}
+                    </div>
+                </div>
+                ${!isReadOnly ? `
+                    <div class="flex items-center gap-1.5">
+                        <button onclick='editSeasonById(${s.id})' class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Редактировать">✏️</button>
+                        <button onclick="moveSeason(${s.id}, 'up')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Выше">⬆️</button>
+                        <button onclick="moveSeason(${s.id}, 'down')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Ниже">⬇️</button>
+                        <button onclick="deleteSeason(${s.id})" class="theme-card border hover:border-red-900 px-2.5 py-1.5 rounded-lg text-red-400 ml-2" title="Удалить">🗑️</button>
+                    </div>
+                ` : ''}
+            </div>
+
+            ${s.comment ? `<div onclick="toggleExpand('s-comment-${s.id}')" id="s-comment-${s.id}" class="text-xs text-gray-400 italic line-clamp-2 hover:text-gray-200 cursor-pointer break-words max-w-full transition">💬 "${s.comment}"</div>` : ''}
+
+            <div class="flex flex-wrap gap-2">
+                ${sortedUnits.length === 0 ? '<span class="text-gray-600 italic">Нет элементов</span>' : 
+                    sortedUnits.map(u => {
+                        let bgStyle = "theme-card border text-gray-200 hover:border-gray-500";
+                        if (u.unit_type === 'movie') bgStyle = "bg-purple-950/60 border-purple-800/80 text-purple-200 font-semibold";
+                        if (u.unit_type === 'special') bgStyle = "bg-blue-950/60 border-blue-800/80 text-blue-200";
+
+                        return `
+                            <div onclick='openUnitModalById(${u.id})' title="${u.comment ? '💬 ' + u.comment : ''}" class="${bgStyle} px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm cursor-pointer transition">
+                                ${u.unit_type === 'movie' ? '🎬 ' : ''}
+                                <span>${u.display_number}${u.title ? '— ' + u.title : ''}</span>
+                                ${u.rating !== null && u.rating !== undefined ? `<span class="text-amber-300 text-xs font-bold bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">★ ${u.rating}</span>` : ''}
+                                ${u.comment ? '<span class="text-gray-400 text-xs">💬</span>' : ''}
+                                ${!isReadOnly ? `<button onclick="event.stopPropagation(); deleteUnit(${u.id})" class="text-gray-500 hover:text-red-400 text-xs ml-1">✕</button>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+            </div>
+
+            ${!isReadOnly ? `
+                <div class="flex flex-col gap-2.5 pt-2 border-t border-gray-800">
+                    <div class="flex gap-2">
+                        <select id="u-type-${s.id}" class="theme-card border rounded-lg px-2 py-1.5 text-gray-300">
+                            <option value="episode">Эпизод</option>
+                            <option value="movie">Фильм 🎬</option>
+                            <option value="special">Спешл</option>
+                        </select>
+                        <input type="text" id="u-num-${s.id}" placeholder="№ (1 или 6.5)" class="w-28 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
+                        <input type="text" id="u-title-${s.id}" placeholder="Название..." class="flex-1 theme-card border rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-500">
+                        <input type="number" id="u-dur-${s.id}" placeholder="Мин" title="Кастомная длительность" class="w-16 theme-card border rounded-lg px-2.5 py-1.5 text-center focus:outline-none focus:border-gray-500">
+                        <button onclick="createUnit(${s.id})" class="bg-gray-800 hover:bg-gray-700 px-4 py-1.5 rounded-lg transition">+ Добавить</button>
+                    </div>
+                    <div class="flex gap-2 items-center text-gray-400">
+                        <span>Пакет серий: с</span>
+                        <input type="number" id="batch-start-${s.id}" value="1" class="w-14 theme-card border rounded px-2 py-1 text-center">
+                        <span>по</span>
+                        <input type="number" id="batch-end-${s.id}" value="12" class="w-14 theme-card border rounded px-2 py-1 text-center">
+                        <button onclick="createBatch(${s.id})" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3.5 py-1 rounded-lg transition">Добавить пачкой</button>
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    }).join('');
+}
 
         async function saveSeason() {
             if (isReadOnly) return;

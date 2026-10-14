@@ -304,7 +304,7 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db))
     if col.user_id != title_data.user_id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужие списки")
 
-    # Создаем тайтл без тегов
+    # Создаем тайтл (теги теперь живут исключительно у сезонов)
     new_title = models.MediaTitle(
         title=title_data.title,
         collection_id=title_data.collection_id,
@@ -313,17 +313,6 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db))
         rating=title_data.rating
     )
     db.add(new_title)
-    db.flush() # Получаем ID нового тайтла
-
-    # Создаем теги из прилетевшего массива строк
-    if title_data.tags and isinstance(title_data.tags, list):
-        for tag_name in title_data.tags:
-            if tag_name:
-                # В зависимости от того, как у тебя называется поле в модели TitleTag 
-                # (обычно name или title), подставь нужное. Пусть будет name:
-                new_tag = models.TitleTag(media_title_id=new_title.id, name=tag_name)
-                db.add(new_tag)
-
     db.commit()
     db.refresh(new_title)
     return new_title
