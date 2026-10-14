@@ -642,12 +642,10 @@
                                 ${formattedDate ? `<span class="text-gray-500">📅 ${formattedDate}</span>` : ''}
                                 <span class="text-gray-500">${t.release_day ? '(' + t.release_day + ')' : '✅ Завершен'}</span>
 
-                                ${(t.seasons && t.seasons.length > 0 && t.seasons[t.seasons.length - 1].tags) ? 
-                                    t.seasons[t.seasons.length - 1].tags.map(tag => {
-                                        const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                                        return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
-                                    }).join('') : ''
-                                }
+                                ${t.tags.map(tag => {
+                                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                                    return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                                }).join('')}
                             </div>
                         </div>
                         ${!isReadOnly ? `

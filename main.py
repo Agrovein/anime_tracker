@@ -243,10 +243,14 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
         
         latest_season_title = None
         latest_unit_num = None
+        latest_season_tags = []
 
         for s in t.seasons:
             total_seasons += 1
             latest_season_title = s.title
+            # Сохраняем теги текущего сезона (в конце цикла тут останутся теги самого последнего сезона)
+            latest_season_tags = [tag.name for tag in s.tags] if hasattr(s, 'tags') else []
+            
             for u in s.units:
                 latest_unit_num = u.display_number
                 dur = u.duration_mins if u.duration_mins else s.default_duration_mins
@@ -255,7 +259,7 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
                     t_movies += 1
                     total_movies += 1
                 elif u.unit_type == "special":
-                    total_specials += 1
+                    t_specials += 1
                 else:
                     t_episodes += 1
                     total_episodes += 1
@@ -267,7 +271,7 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
             "id": t.id,
             "title": t.title,
             "collection_id": t.collection_id,
-            "tags": t.tags,
+            "tags": latest_season_tags,  # <--- Теперь здесь всегда теги из последнего сезона!
             "release_day": t.release_day,
             "comment": t.comment,
             "rating": t.rating,
