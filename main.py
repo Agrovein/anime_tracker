@@ -325,16 +325,26 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db))
     return new_title
 
 @app.put("/api/titles/{title_id}")
-def update_title(title_id: int, title_data: schemas.TitleUpdate, db: Session = Depends(get_db)):
+def update_title(title_id: int, title_data: schemas.TitleUpdate, user_id: int, db: Session = Depends(get_db)):
     t = db.query(models.MediaTitle).filter(models.MediaTitle.id == title_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Тайтл не найден")
-    if t.collection.user_id != title_data.user_id:
+    if t.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужие тайтлы")
 
-    for key, value in title_data.dict(exclude_unset=True).items():
+    update_dict = title_data.model_dump(exclude_unset=True)
+    tags_data = update_dict.pop('tags', None)
+
+    for key, value in update_dict.items():
         setattr(t, key, value)
     
+    # Если тайтлы поддерживают теги через связь/модель, синхронизируем их аналогично
+    if tags_data is not None and hasattr(models, 'TitleTag'):
+        db.query(models.TitleTag).filter(models.TitleTag.title_id == t.id).delete()
+        for tag_name in tags_data:
+            if tag_name:
+                db.add(models.TitleTag(title_id=t.id, name=tag_name))
+
     db.commit()
     db.refresh(t)
     return t
@@ -434,9 +444,9 @@ def create_season(season_data: schemas.SeasonCreate, user_id: int, db: Session =
 
     # Логика автотегов по длительности (если указана длительность)
     if new_season.default_duration_mins is not None and new_season.default_duration_mins > 0:
-        auto_tag = "шорт(5минут)" if new_season.default_duration_mins < 10 else "лонг(15минут)"
+        auto_tag = "short(5min)" if new_season.default_duration_mins < 10 else "long(15min)"
         # Удаляем противоположный автотег на всякий случай и добавляем актуальный
-        tags_to_save = [t for t in tags_to_save if t not in ("шорт(5минут)", "лонг(15минут)")]
+        tags_to_save = [t for t in tags_to_save if t not in ("short(5min)", "long(15min)")]
         tags_to_save.append(auto_tag)
 
     # Сохраняем итоговый список тегов
@@ -457,28 +467,26 @@ def update_season(season_id: int, season_data: schemas.SeasonUpdate, user_id: in
     if s.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя редактировать чужие сезоны")
 
-    update_dict = season_data.model_dump(exclude_unset=True) # Заменили dict на model_dump
+    update_dict = season_data.model_dump(exclude_unset=True)
     tags_data = update_dict.pop('tags', None)
 
-    # Обновляем остальные поля сезона
     for key, value in update_dict.items():
         setattr(s, key, value)
     
-    # Если теги передавали явно, берем их, иначе оставляем существующие теги сезона
-    if tags_data is not None and isinstance(tags_data, list):
+    # Безопасно собираем текущие теги
+    if tags_data is not None:
         current_tags = [t for t in tags_data if t]
     else:
         current_tags = [t.name for t in s.tags]
 
-    # Пересчитываем автотег на основе актуальной длительности сезона
+    # Пересчитываем автотег длительности
     duration_to_check = s.default_duration_mins
     if duration_to_check is not None and duration_to_check > 0:
-        auto_tag = "шорт(5минут)" if duration_to_check < 10 else "лонг(15минут)"
-        # Очищаем старые автотеги и добавляем актуальный
-        current_tags = [t for t in current_tags if t not in ("шорт(5минут)", "лонг(15минут)")]
+        auto_tag = "short(5min)" if duration_to_check < 10 else "long(15min)"
+        current_tags = [t for t in current_tags if t not in ("short(5min)", "long(15min)")]
         current_tags.append(auto_tag)
 
-    # Перезаписываем теги в базе
+    # Полностью синхронизируем теги в базе
     db.query(models.SeasonTag).filter(models.SeasonTag.season_id == s.id).delete()
     for tag_name in current_tags:
         new_tag = models.SeasonTag(season_id=s.id, name=tag_name)
@@ -544,13 +552,18 @@ def create_unit(unit_data: schemas.UnitCreate, user_id: int, db: Session = Depen
     if season.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя добавлять серии в чужие сезоны")
 
-    # Вычисляем order_index на основе display_number (чтобы "263.5" встало между 263 и 264)
+    # Вычисляем order_index на основе display_number (чтобы дробные номера вставали корректно)
     if unit_data.order_index is None:
         max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == unit_data.season_id).scalar() or 0.0
-        calculated_order = parse_order_index(unit_data.display_number, max_order + 1.0)
+        try:
+            # Пытаемся распарсить display_number как float для правильного порядка
+            base_num = float(unit_data.display_number)
+            calculated_order = base_num
+        except ValueError:
+            calculated_order = max_order + 1.0
         unit_data.order_index = calculated_order
 
-    new_unit = models.MediaUnit(**unit_data.dict())
+    new_unit = models.MediaUnit(**unit_data.model_dump())
     db.add(new_unit)
     db.commit()
     db.refresh(new_unit)

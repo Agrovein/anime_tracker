@@ -857,7 +857,14 @@
                             <div class="flex gap-1">
                                 ${s.tags.map(tag => {
                                     const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                                    // Задаем разные цвета для коротких и длинных серий
+                                    let colorClass = 'bg-gray-800 text-gray-300 border-gray-700';
+                                    if (strTag.includes('short')) {
+                                        colorClass = 'bg-emerald-950 text-emerald-300 border-emerald-800';
+                                    } else if (strTag.includes('long')) {
+                                        colorClass = 'bg-indigo-950 text-indigo-300 border-indigo-800';
+                                    }
+                                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${colorClass}">${strTag}</span>`;
                                 }).join('')}
                             </div>
                         </div>
@@ -1021,13 +1028,21 @@
             const unit_type = document.getElementById(`u-type-${seasonId}`).value;
             const display_number = document.getElementById(`u-num-${seasonId}`).value.trim();
             const title = document.getElementById(`u-title-${seasonId}`).value.trim() || null;
-            const duration_mins = document.getElementById(`u-dur-${seasonId}`).value.trim() || null;
+            const rawDur = document.getElementById(`u-dur-${seasonId}`).value.trim();
+            const duration_mins = rawDur ? parseInt(rawDur) : null;
+            
             if (!display_number) return;
 
             await fetch(`/api/units?user_id=${currentUserId}`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({season_id: seasonId, display_number, title, unit_type, duration_mins})
+                body: JSON.stringify({
+                    season_id: seasonId, 
+                    display_number, 
+                    title, 
+                    unit_type, 
+                    duration_mins
+                })
             });
             loadDetails();
         }
