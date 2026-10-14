@@ -641,7 +641,7 @@
                                 <span class="text-gray-300 font-semibold">⏱ ~${t.total_hours} ч</span>
                                 ${formattedDate ? `<span class="text-gray-500">📅 ${formattedDate}</span>` : ''}
                                 <span class="text-gray-500">${t.release_day ? '(' + t.release_day + ')' : '✅ Завершен'}</span>
-                                // Внутри renderTitlesList(titles), вместо старого рендеринга t.tags, заменяем эту строчку:
+
                                 ${(t.seasons && t.seasons.length > 0 && t.seasons[t.seasons.length - 1].tags) ? 
                                     t.seasons[t.seasons.length - 1].tags.map(tag => {
                                         const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
