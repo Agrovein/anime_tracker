@@ -590,10 +590,8 @@
                 const matchName = t.title.toLowerCase().includes(query);
                 const matchComment = t.comment && t.comment.toLowerCase().includes(query);
                 
-                // Берем только самый последний сезон тайтла (если он есть)
-                const latestSeason = (t.seasons && t.seasons.length > 0) ? t.seasons[t.seasons.length - 1] : null;
-                
-                const matchTag = latestSeason && latestSeason.tags && latestSeason.tags.some(tag => {
+                // Теперь t.tags уже содержат актуальные теги последнего сезона, прилетающие с бэкенда!
+                const matchTag = t.tags && t.tags.some(tag => {
                     const sTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
                     return sTag.toLowerCase().includes(query);
                 });
@@ -776,10 +774,11 @@
                 <span class="text-gray-200 font-semibold">⏱ ~${data.total_hours} ч</span>
                 ${formattedDate ? `<span class="text-gray-400">📅 ${formattedDate}</span>` : ''}
                 <span class="text-gray-400">${data.release_day ? '(' + data.release_day + ')' : '✅ Завершен'}</span>
-                ${activeTitleObj && activeTitleObj.tags ? activeTitleObj.tags.map(tag => {
+                ${s.tags.map(tag => {
                     const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                    return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
-                }).join('') : ''}
+                    // Обязательно используем ${getTagClass(strTag)}, чтобы применились наши CSS-классы цветов!
+                    return `<span class="text-xs border px-1.5 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                }).join('')}
             `;
 
             const container = document.getElementById('seasons-list');
