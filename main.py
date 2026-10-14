@@ -332,19 +332,10 @@ def update_title(title_id: int, title_data: schemas.TitleUpdate, user_id: int, d
     if t.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужие тайтлы")
 
-    update_dict = title_data.model_dump(exclude_unset=True)
-    tags_data = update_dict.pop('tags', None)
-
-    for key, value in update_dict.items():
+    # Обновляем только обычные поля тайтла (название, статус и т.д.)
+    for key, value in title_data.model_dump(exclude_unset=True, exclude={'tags'}):
         setattr(t, key, value)
     
-    # Если тайтлы поддерживают теги через связь/модель, синхронизируем их аналогично
-    if tags_data is not None and hasattr(models, 'TitleTag'):
-        db.query(models.TitleTag).filter(models.TitleTag.title_id == t.id).delete()
-        for tag_name in tags_data:
-            if tag_name:
-                db.add(models.TitleTag(title_id=t.id, name=tag_name))
-
     db.commit()
     db.refresh(t)
     return t
@@ -552,18 +543,18 @@ def create_unit(unit_data: schemas.UnitCreate, user_id: int, db: Session = Depen
     if season.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя добавлять серии в чужие сезоны")
 
-    # Вычисляем order_index на основе display_number (чтобы дробные номера вставали корректно)
-    if unit_data.order_index is None:
-        max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == unit_data.season_id).scalar() or 0.0
-        try:
-            # Пытаемся распарсить display_number как float для правильного порядка
-            base_num = float(unit_data.display_number)
-            calculated_order = base_num
-        except ValueError:
-            calculated_order = max_order + 1.0
-        unit_data.order_index = calculated_order
+    # Вычисляем порядок на основе максимального order_index в сезоне
+    max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == unit_data.season_id).scalar() or 0.0
+    try:
+        calculated_order = float(unit_data.display_number)
+    except ValueError:
+        calculated_order = max_order + 1.0
 
-    new_unit = models.MediaUnit(**unit_data.model_dump())
+    # Создаем словарь данных и принудительно добавляем рассчитанный order_index
+    unit_dict = unit_data.model_dump()
+    unit_dict["order_index"] = calculated_order
+
+    new_unit = models.MediaUnit(**unit_dict)
     db.add(new_unit)
     db.commit()
     db.refresh(new_unit)
@@ -601,7 +592,7 @@ def update_unit(unit_id: int, unit_data: schemas.UnitUpdate, user_id: int, db: S
     if u.season.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужие серии")
 
-    for key, value in unit_data.dict(exclude_unset=True).items():
+    for key, value in unit_data.model_dump(exclude_unset=True).items():
         setattr(u, key, value)
     
     db.commit()

@@ -130,14 +130,7 @@
 
                             <div id="title-form-container" class="hidden flex flex-col gap-3 theme-input p-4 rounded-xl border mt-2">
                                 <input type="hidden" id="edit-title-id" value="">
-                                <input type="text" id="new-title-name" placeholder="Название тайтла..." class="w-full theme-card border rounded-xl px-3 py-2.5 focus:outline-none focus:border-gray-500">
-                                
-                                <div class="flex gap-4 items-center text-gray-300">
-                                    <span class="text-gray-400">Теги:</span>
-                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="2D" class="accent-gray-600"> 2D</label>
-                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="3D" class="accent-gray-600"> 3D</label>
-                                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="title-tag" value="#ИИ" class="accent-gray-600"> #ИИ</label>
-                                </div>
+                                <input type="text" id="new-title-name" placeholder="Название тайтла..." class="w-full theme-card border rounded-xl px-3 py-2.5 focus:outline-none focus:border-gray-500">                                                              
 
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                     <input type="text" id="new-title-comment" placeholder="Комментарий к тайтлу..." class="md:col-span-2 theme-card border rounded-xl px-3 py-2 focus:outline-none focus:border-gray-500">
@@ -596,10 +589,15 @@
             const filtered = allTitlesCache.filter(t => {
                 const matchName = t.title.toLowerCase().includes(query);
                 const matchComment = t.comment && t.comment.toLowerCase().includes(query);
-                const matchTag = t.tags.some(tag => {
+                
+                // Берем только самый последний сезон тайтла (если он есть)
+                const latestSeason = (t.seasons && t.seasons.length > 0) ? t.seasons[t.seasons.length - 1] : null;
+                
+                const matchTag = latestSeason && latestSeason.tags && latestSeason.tags.some(tag => {
                     const sTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
                     return sTag.toLowerCase().includes(query);
                 });
+
                 return matchName || matchComment || matchTag;
             });
             renderTitlesList(filtered);
@@ -643,10 +641,13 @@
                                 <span class="text-gray-300 font-semibold">⏱ ~${t.total_hours} ч</span>
                                 ${formattedDate ? `<span class="text-gray-500">📅 ${formattedDate}</span>` : ''}
                                 <span class="text-gray-500">${t.release_day ? '(' + t.release_day + ')' : '✅ Завершен'}</span>
-                                ${t.tags.map(tag => {
-                                    const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                                    return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
-                                }).join('')}
+                                // Внутри renderTitlesList(titles), вместо старого рендеринга t.tags, заменяем эту строчку:
+                                ${(t.seasons && t.seasons.length > 0 && t.seasons[t.seasons.length - 1].tags) ? 
+                                    t.seasons[t.seasons.length - 1].tags.map(tag => {
+                                        const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
+                                        return `<span class="border px-2 py-0.5 rounded ${getTagClass(strTag)}">${strTag}</span>`;
+                                    }).join('') : ''
+                                }
                             </div>
                         </div>
                         ${!isReadOnly ? `
@@ -674,9 +675,7 @@
             const rating = document.getElementById('new-title-rating').value;
             if (!title) return;
 
-            const tags = Array.from(document.querySelectorAll('input[name="title-tag"]:checked')).map(cb => cb.value);
-
-            const payload = {title, collection_id: activeColId, user_id: currentUserId, tags, release_day, comment, rating};
+            const payload = {title, collection_id: activeColId, user_id: currentUserId, release_day, comment, rating};
 
             await fetch(editId ? `/api/titles/${editId}` : '/api/titles', {
                 method: editId ? 'PUT' : 'POST',
@@ -695,10 +694,6 @@
             document.getElementById('new-title-day').value = t.release_day || "";
             document.getElementById('new-title-comment').value = t.comment || "";
             document.getElementById('new-title-rating').value = t.rating !== null && t.rating !== undefined ? t.rating : "";
-            
-            document.querySelectorAll('input[name="title-tag"]').forEach(cb => {
-                cb.checked = t.tags.includes(cb.value);
-            });
 
             document.getElementById('save-title-btn').innerText = "Сохранить";
             toggleTitleForm(true);
@@ -857,12 +852,15 @@
                             <div class="flex gap-1">
                                 ${s.tags.map(tag => {
                                     const strTag = typeof tag === 'object' ? (tag.name || tag.title || '') : tag;
-                                    // Задаем разные цвета для коротких и длинных серий
-                                    let colorClass = 'bg-gray-800 text-gray-300 border-gray-700';
+                                    let colorClass = 'bg-gray-800 text-gray-300 border-gray-700'; // Дефолтный цвет для обычных тегов
+                                    
                                     if (strTag.includes('short')) {
                                         colorClass = 'bg-emerald-950 text-emerald-300 border-emerald-800';
                                     } else if (strTag.includes('long')) {
                                         colorClass = 'bg-indigo-950 text-indigo-300 border-indigo-800';
+                                    } else {
+                                        // Красивые кастомные цвета для остальных тегов (например, сине-серые или фиолетовые)
+                                        colorClass = 'bg-zinc-800 text-zinc-300 border-zinc-700';
                                     }
                                     return `<span class="text-xs border px-1.5 py-0.5 rounded ${colorClass}">${strTag}</span>`;
                                 }).join('')}
