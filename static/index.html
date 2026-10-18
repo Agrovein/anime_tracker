@@ -196,7 +196,7 @@
                                             <span class="text-gray-400">Теги сезона:</span>
                                             <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="2D" class="accent-gray-600"> 2D</label>
                                             <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="3D" class="accent-gray-600"> 3D</label>
-                                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="#ИИ" class="accent-gray-600"> #ИИ</label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="season-tag" value="#ИИ" class="accent-gray-600"> AI</label>
                                         </div>
 
                                         <div class="flex justify-end gap-2 pt-1">
@@ -509,7 +509,7 @@
             if (tagStr.includes('long')) return 'tag-long';
             if (tagStr === '2D' || tagStr === '#2D') return 'tag-2d';
             if (tagStr === '3D' || tagStr === '#3D') return 'tag-3d';
-            if (tagStr === '#ИИ') return 'tag-ai';
+            if (tagStr === 'AI') return 'tag-ai';
             return 'tag-default';
         }
 
@@ -668,18 +668,44 @@
             const title = document.getElementById('new-title-name').value.trim();
             const release_day = document.getElementById('new-title-day').value || null;
             const comment = document.getElementById('new-title-comment').value.trim() || null;
-            const rating = document.getElementById('new-title-rating').value;
+            
+            const rawRating = document.getElementById('new-title-rating').value.trim();
+            let rating = null;
+            if (rawRating !== "" && !isNaN(parseFloat(rawRating))) {
+                rating = parseFloat(rawRating);
+            }
+
             if (!title) return;
 
-            const payload = {title, collection_id: activeColId, user_id: currentUserId, release_day, comment, rating};
+            const payload = editId ? {
+                title,
+                release_day,
+                comment,
+                rating
+            } : {
+                title,
+                collection_id: activeColId,
+                user_id: currentUserId,
+                release_day,
+                comment,
+                rating
+            };
 
-            await fetch(editId ? `/api/titles/${editId}` : '/api/titles', {
+            const res = await fetch(editId ? `/api/titles/${editId}` : '/api/titles', {
                 method: editId ? 'PUT' : 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
 
+            if (!res.ok) {
+                const errData = await res.json();
+                console.error("Ошибка сохраниения 422/500:", errData);
+                alert("Ошибка сохранения: " + JSON.stringify(errData.detail || errData));
+                return;
+            }
+
             toggleTitleForm(false);
+            resetTitleForm();
             loadTitles();
         }
 
@@ -854,7 +880,7 @@
                                 colorClass = 'tag-2d';
                             } else if (strTag === '3D' || strTag === '#3D') {
                                 colorClass = 'tag-3d';
-                            } else if (strTag === '#ИИ') {
+                            } else if (strTag === 'AI') {
                                 colorClass = 'tag-ai';
                             } else {
                                 colorClass = 'tag-default';

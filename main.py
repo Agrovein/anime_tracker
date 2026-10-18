@@ -318,17 +318,16 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db))
     return new_title
 
 @app.put("/api/titles/{title_id}")
-def update_title(title_id: int, title_data: schemas.TitleUpdate, user_id: int, db: Session = Depends(get_db)):
+def update_title(title_id: int, title_data: schemas.TitleUpdate, db: Session = Depends(get_db)):
     t = db.query(models.MediaTitle).filter(models.MediaTitle.id == title_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Тайтл не найден")
-    if t.collection.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Нельзя изменять чужие тайтлы")
 
-    # Обновляем только обычные поля тайтла (название, статус и т.д.)
-    for key, value in title_data.model_dump(exclude_unset=True, exclude={'tags'}):
-        setattr(t, key, value)
-    
+    t.title = title_data.title
+    t.release_day = title_data.release_day
+    t.comment = title_data.comment
+    t.rating = title_data.rating
+
     db.commit()
     db.refresh(t)
     return t

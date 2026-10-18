@@ -24,16 +24,13 @@ class CollectionResponse(BaseModel):
 class TitleCreate(BaseModel):
     title: str
     collection_id: int
-    user_id: int  # <--- Добавили для проверки прав владельца
-    tags: Optional[List[str]] = []
+    user_id: int
     release_day: Optional[str] = None
     comment: Optional[str] = None
     rating: Optional[float] = None
 
 class TitleUpdate(BaseModel):
-    title: Optional[str] = None
-    user_id: Optional[int] = None  # <--- Добавили для проверки прав владельца
-    tags: Optional[List[str]] = None
+    title: str
     release_day: Optional[str] = None
     comment: Optional[str] = None
     rating: Optional[float] = None
