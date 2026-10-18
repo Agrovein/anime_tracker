@@ -582,6 +582,14 @@ def create_batch_units(batch_data: schemas.BatchUnitCreate, user_id: int, db: Se
     if season.media_title.collection.user_id != user_id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужие сезоны")
 
+    # ЗАЩИТА ОТ ОПЕЧАТОК: поднимаем лимит до 1500 серий за раз для масштабных пачек короткометражек
+    max_batch_size = 1500
+    if batch_data.end < batch_data.start or (batch_data.end - batch_data.start + 1) > max_batch_size:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Слишком большой диапазон. За раз можно добавить не более {max_batch_size} серий."
+        )
+
     max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == batch_data.season_id).scalar() or 0.0
 
     for i in range(batch_data.start, batch_data.end + 1):
