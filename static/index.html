@@ -102,6 +102,11 @@
                         <div class="flex justify-between text-gray-300"><span>Тайтлов:</span> <b id="stat-titles" class="text-gray-200">0</b></div>
                         <div class="flex justify-between text-gray-300"><span>Сезонов:</span> <b id="stat-seasons" class="text-gray-200">0</b></div>
                         <div class="flex justify-between text-gray-300"><span>Эпизодов:</span> <b id="stat-episodes" class="text-gray-200">0</b></div>
+                        
+                        <!-- Детализация эпизодов по хронометражу -->
+                        <div class="flex justify-between text-gray-400 pl-3 text-[11px]"><span>└ Коротких (&lt;10 мин):</span> <b id="stat-shorts" class="text-gray-300">0</b></div>
+                        <div class="flex justify-between text-gray-400 pl-3 text-[11px]"><span>└ Длинных (&ge;10 мин):</span> <b id="stat-longs" class="text-gray-300">0</b></div>
+
                         <div class="flex justify-between text-gray-300"><span>Фильмов:</span> <b id="stat-movies" class="text-gray-200">0</b></div>
                         <div class="flex justify-between text-gray-300"><span>Спешлов:</span> <b id="stat-specials" class="text-gray-200">0</b></div>
                         <div class="pt-2 border-t border-gray-800 flex justify-between text-gray-200 font-semibold">
@@ -573,6 +578,8 @@
             document.getElementById('stat-titles').innerText = stats.titles;
             document.getElementById('stat-seasons').innerText = stats.seasons;
             document.getElementById('stat-episodes').innerText = stats.episodes;
+            document.getElementById('stat-shorts').innerText = stats.shorts_count; // <--- Новое
+            document.getElementById('stat-longs').innerText = stats.longs_count;   // <--- Новое
             document.getElementById('stat-movies').innerText = stats.movies;
             document.getElementById('stat-specials').innerText = stats.specials;
             document.getElementById('stat-hours').innerText = stats.total_hours + " ч";

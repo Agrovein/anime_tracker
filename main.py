@@ -227,6 +227,16 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Список не найден")
     
     titles = col.titles
+
+    # --- СОРТИРОВКА ТАЙТЛОВ ---
+    def sort_key(t):
+        is_ongoing = 1 if t.release_day and t.release_day.strip() else 0
+        timestamp = t.last_edited_at.timestamp() if t.last_edited_at else 0.0
+        return (is_ongoing, timestamp)
+
+    titles = sorted(titles, key=sort_key, reverse=True)
+    # --------------------------
+
     titles_data = []
     
     total_episodes = 0
@@ -234,6 +244,10 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
     total_specials = 0
     total_seasons = 0
     total_hours = 0.0
+    
+    # Новые счетчики для шортов и лонгов
+    total_shorts = 0
+    total_longs = 0
 
     for t in titles:
         t_episodes = 0
@@ -248,13 +262,13 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
         for s in t.seasons:
             total_seasons += 1
             latest_season_title = s.title
-            # Сохраняем теги текущего сезона (в конце цикла тут останутся теги самого последнего сезона)
             latest_season_tags = [tag.name for tag in s.tags] if hasattr(s, 'tags') else []
             
             for u in s.units:
                 latest_unit_num = u.display_number
                 dur = u.duration_mins if u.duration_mins else s.default_duration_mins
                 t_mins += dur
+                
                 if u.unit_type == "movie":
                     t_movies += 1
                     total_movies += 1
@@ -263,6 +277,12 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
                 else:
                     t_episodes += 1
                     total_episodes += 1
+                    
+                    # Классифицируем обычный эпизод по хронометражу
+                    if dur < 10:
+                        total_shorts += 1
+                    else:
+                        total_longs += 1
 
         t_hours = round(t_mins / 60, 1)
         total_hours += t_mins
@@ -271,7 +291,7 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
             "id": t.id,
             "title": t.title,
             "collection_id": t.collection_id,
-            "tags": latest_season_tags,  # <--- Теперь здесь всегда теги из последнего сезона!
+            "tags": latest_season_tags,
             "release_day": t.release_day,
             "comment": t.comment,
             "rating": t.rating,
@@ -289,6 +309,8 @@ def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
         "titles": len(titles),
         "seasons": total_seasons,
         "episodes": total_episodes,
+        "shorts_count": total_shorts,  # Эпизоды < 10 минут
+        "longs_count": total_longs,    # Эпизоды >= 10 минут
         "movies": total_movies,
         "specials": total_specials,
         "total_hours": round(total_hours / 60, 1)
