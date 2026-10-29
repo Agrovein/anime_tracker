@@ -1178,6 +1178,35 @@ async function renameCollection(colId, currentTitle) {
             loadCollections();
         }
 
+async function quickAddEpisode(targetType, targetId) {
+    const userId = 1; // Подставь свой актуальный ID пользователя
+    const url = targetType === 'title' 
+        ? `/api/titles/${targetId}/quick-add-episode?user_id=${userId}`
+        : `/api/seasons/${targetId}/quick-add-episode?user_id=${userId}`;
+
+    try {
+        let response = await fetch(url, { method: 'POST' });
+        if (!response.ok) {
+            let err = await response.json();
+            alert("Ошибка: " + (err.detail || "Не удалось добавить серию"));
+            return;
+        }
+
+        let data = await response.json();
+        console.log("Успешно:", data.message);
+
+        // Вместо полной перезагрузки страницы можно просто обновить данные 
+        // или вызвать твою функцию обновления списка (если она есть)
+        if (typeof loadCollectionData === 'function') {
+            loadCollectionData(); 
+        } else {
+            location.reload(); // Классический вариант с перезагрузкой, если пока так проще
+        }
+    } catch (e) {
+        console.error("Сбой сети:", e);
+    }
+}
+
     </script>
 </body>
 </html>

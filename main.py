@@ -645,3 +645,74 @@ def update_collection(collection_id: int, user_id: int, title: str, db: Session 
     db.commit()
     db.refresh(col)
     return col
+
+
+
+@app.post("/api/titles/{title_id}/quick-add-episode")
+def quick_add_episode_to_title(title_id: int, user_id: int, db: Session = Depends(get_db)):
+    # 1. Находим тайтл и проверяем права
+    title = db.query(models.MediaTitle).filter(models.MediaTitle.id == title_id).first()
+    if not title:
+        raise HTTPException(status_code=404, detail="Тайтл не найден")
+    if title.collection.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Нельзя изменять чужие тайтлы")
+
+    # 2. Берем самый последний сезон (обычно последний в списке или по порядку)
+    if not title.seasons:
+        raise HTTPException(status_code=400, detail="У этого тайтла нет ни одного сезона")
+    
+    # Сортируем сезоны по id или индексу, чтобы взять самый последний
+    latest_season = max(title.seasons, key=lambda s: s.id) # или s.order_index, если он есть
+    
+    return add_episode_to_season_logic(latest_season, db)
+
+
+@app.post("/api/seasons/{season_id}/quick-add-episode")
+def quick_add_episode_to_season(season_id: int, user_id: int, db: Session = Depends(get_db)):
+    # 1. Находим сезон и проверяем права
+    season = db.query(models.Season).filter(models.Season.id == season_id).first()
+    if not season:
+        raise HTTPException(status_code=404, detail="Сезон не найден")
+    if season.media_title.collection.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Нельзя изменять чужие сезоны")
+
+    return add_episode_to_season_logic(season, db)
+
+
+# Вспомогательная логика вычисления номера и добавления
+def add_episode_to_season_logic(season, db: Session):
+    # Находим максимальный order_index в сезоне
+    max_order = db.query(func.max(models.MediaUnit.order_index)).filter(models.MediaUnit.season_id == season.id).scalar() or 0.0
+
+    # Пытаемся определить последний числовой номер серии среди существующих юнитов типа episode
+    existing_episodes = db.query(models.MediaUnit).filter(
+        models.MediaUnit.season_id == season.id,
+        models.MediaUnit.unit_type == "episode"
+    ).all()
+
+    next_num = 1
+    if existing_episodes:
+        # Ищем максимальное число среди display_number, которые можно скастовать в int
+        numeric_nums = []
+        for u in existing_episodes:
+            try:
+                numeric_nums.append(int(u.display_number))
+            except ValueError:
+                pass
+        if numeric_nums:
+            next_num = max(numeric_nums) + 1
+        else:
+            next_num = len(existing_episodes) + 1
+
+    new_unit = models.MediaUnit(
+        season_id=season.id,
+        display_number=str(next_num),
+        unit_type="episode",
+        duration_mins=season.default_duration_mins,
+        order_index=max_order + 1.0
+    )
+    db.add(new_unit)
+    db.commit()
+    db.refresh(new_unit)
+    
+    return {"message": f"Добавлена серия {next_num}", "unit": new_unit.id}
