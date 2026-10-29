@@ -655,6 +655,7 @@
                         </div>
                         ${!isReadOnly ? `
                             <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="event.stopPropagation(); quickAddToLatestSeason(${t.id})" class="theme-card hover:bg-gray-800 border px-3 py-2 rounded-xl text-gray-300 transition" title="Добавить следующую серию">➕</button>
                                 <button onclick='editTitleById(${t.id})' class="theme-card hover:bg-gray-800 border px-3 py-2 rounded-xl text-gray-300 transition">✏️</button>
                                 <button onclick="deleteTitle(${t.id})" class="theme-card hover:bg-red-950/40 border hover:border-red-900 px-3 py-2 rounded-xl text-red-400 transition">🗑️</button>
                             </div>
@@ -898,6 +899,7 @@
                 </div>
                 ${!isReadOnly ? `
                     <div class="flex items-center gap-1.5">
+                        <button onclick="quickAddEpisodeFromSeason(${s.id})" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Добавить следующую серию">➕</button>
                         <button onclick='editSeasonById(${s.id})' class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Редактировать">✏️</button>
                         <button onclick="moveSeason(${s.id}, 'up')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Выше">⬆️</button>
                         <button onclick="moveSeason(${s.id}, 'down')" class="theme-card border hover:bg-gray-800 px-2.5 py-1.5 rounded-lg text-gray-300" title="Ниже">⬇️</button>
@@ -1075,6 +1077,56 @@
             loadDetails();
         }
 
+        // Быстрое добавление следующей серии в сезон. Возвращает true при успехе.
+        async function quickAddEpisode(seasonId) {
+            if (isReadOnly || !currentUserId) return false;
+            try {
+                const res = await fetch(`/api/seasons/${seasonId}/quick-add-episode?user_id=${currentUserId}`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.detail || 'Не удалось добавить серию');
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                alert('Ошибка сети');
+                return false;
+            }
+        }
+
+        // Кнопка на карточке сезона (внутри тайтла)
+        async function quickAddEpisodeFromSeason(seasonId) {
+            if (await quickAddEpisode(seasonId)) loadDetails();
+        }
+
+        // Кнопка на карточке тайтла (главный список): добавляем в последний сезон
+        async function quickAddToLatestSeason(titleId) {
+            if (isReadOnly) return;
+            const t = allTitlesCache.find(x => x.id === titleId);
+            let seasonId = t && t.latest_season_id;
+
+            if (!seasonId) {
+                // Бэкенд не отдаёт id последнего сезона в списке — берём из деталей тайтла
+                try {
+                    const res = await fetch(`/api/titles/${titleId}/details`);
+                    const data = await res.json();
+                    if (!data.seasons || data.seasons.length === 0) {
+                        alert('В тайтле пока нет сезонов — сначала добавь сезон');
+                        return;
+                    }
+                    seasonId = data.seasons[data.seasons.length - 1].id;
+                } catch (e) {
+                    alert('Не удалось получить сезоны тайтла');
+                    return;
+                }
+            }
+
+            if (await quickAddEpisode(seasonId)) {
+                await loadTitles();
+                filterTitles(); // сохраняем активный поиск
+            }
+        }
+
         async function createBatch(seasonId) {
             if (isReadOnly) return;
             const start = parseInt(document.getElementById(`batch-start-${seasonId}`).value);
@@ -1178,34 +1230,7 @@ async function renameCollection(colId, currentTitle) {
             loadCollections();
         }
 
-async function quickAddEpisode(targetType, targetId) {
-    const userId = 1; // Подставь свой актуальный ID пользователя
-    const url = targetType === 'title' 
-        ? `/api/titles/${targetId}/quick-add-episode?user_id=${userId}`
-        : `/api/seasons/${targetId}/quick-add-episode?user_id=${userId}`;
 
-    try {
-        let response = await fetch(url, { method: 'POST' });
-        if (!response.ok) {
-            let err = await response.json();
-            alert("Ошибка: " + (err.detail || "Не удалось добавить серию"));
-            return;
-        }
-
-        let data = await response.json();
-        console.log("Успешно:", data.message);
-
-        // Вместо полной перезагрузки страницы можно просто обновить данные 
-        // или вызвать твою функцию обновления списка (если она есть)
-        if (typeof loadCollectionData === 'function') {
-            loadCollectionData(); 
-        } else {
-            location.reload(); // Классический вариант с перезагрузкой, если пока так проще
-        }
-    } catch (e) {
-        console.error("Сбой сети:", e);
-    }
-}
 
     </script>
 </body>
