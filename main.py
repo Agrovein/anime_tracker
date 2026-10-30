@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from typing import Optional
+from datetime import datetime
 
 import models
 import schemas
@@ -222,7 +223,21 @@ def delete_collection(collection_id: int, user_id: Optional[int] = None, db: Ses
 
 @app.get("/api/collections/{collection_id}/titles")
 def get_titles_by_collection(collection_id: int, db: Session = Depends(get_db)):
-    col = db.query(models.MediaCollection).filter(models.MediaCollection.id == collection_id).first()
+    # Жадно подгружаем тайтлы -> сезоны -> серии/теги несколькими запросами сразу,
+    # вместо отдельного запроса на каждый тайтл/сезон (проблема N+1).
+    col = (
+        db.query(models.MediaCollection)
+        .options(
+            selectinload(models.MediaCollection.titles)
+            .selectinload(models.MediaTitle.seasons)
+            .options(
+                selectinload(models.Season.units),
+                selectinload(models.Season.tags),
+            )
+        )
+        .filter(models.MediaCollection.id == collection_id)
+        .first()
+    )
     if not col:
         raise HTTPException(status_code=404, detail="Список не найден")
     
@@ -421,6 +436,14 @@ def get_title_details(title_id: int, db: Session = Depends(get_db)):
     }
 
 
+def touch_title_if_latest_season(season, db: Session):
+    """Обновляет last_edited_at тайтла, только если season — последний (верхний) сезон тайтла.
+    Коммит делает вызывающий код."""
+    title = season.media_title
+    if title.seasons and title.seasons[-1].id == season.id:
+        title.last_edited_at = datetime.utcnow()
+
+
 # ==================== СЕЗОНЫ ====================
 
 @app.post("/api/seasons")
@@ -459,6 +482,9 @@ def create_season(season_data: schemas.SeasonCreate, user_id: int, db: Session =
         if tag_name:
             new_tag = models.SeasonTag(season_id=new_season.id, name=tag_name)
             db.add(new_tag)
+
+    # Новый сезон всегда становится последним — поднимаем тайтл в списке
+    title.last_edited_at = datetime.utcnow()
 
     db.commit()
     db.refresh(new_season)
@@ -570,6 +596,7 @@ def create_unit(unit_data: schemas.UnitCreate, user_id: int, db: Session = Depen
 
     new_unit = models.MediaUnit(**unit_dict)
     db.add(new_unit)
+    touch_title_if_latest_season(season, db)
     db.commit()
     db.refresh(new_unit)
     return new_unit
@@ -603,6 +630,7 @@ def create_batch_units(batch_data: schemas.BatchUnitCreate, user_id: int, db: Se
         )
         db.add(new_unit)
     
+    touch_title_if_latest_season(season, db)
     db.commit()
     return {"message": "Пакет серий успешно добавлен"}
 
@@ -661,8 +689,9 @@ def quick_add_episode_to_title(title_id: int, user_id: int, db: Session = Depend
     if not title.seasons:
         raise HTTPException(status_code=400, detail="У этого тайтла нет ни одного сезона")
     
-    # Сортируем сезоны по id или индексу, чтобы взять самый последний
-    latest_season = max(title.seasons, key=lambda s: s.id) # или s.order_index, если он есть
+    # Берём тот же «последний сезон», что показывает список и страница тайтла
+    # (последний в title.seasons), чтобы кнопка ➕ добавляла серию именно туда
+    latest_season = title.seasons[-1]
     
     return add_episode_to_season_logic(latest_season, db)
 
@@ -712,6 +741,7 @@ def add_episode_to_season_logic(season, db: Session):
         order_index=max_order + 1.0
     )
     db.add(new_unit)
+    touch_title_if_latest_season(season, db)
     db.commit()
     db.refresh(new_unit)
     
